@@ -1,7 +1,11 @@
-﻿using System.Linq;
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
+using System.Windows.Interop;
 using Kolonnade;
 
 namespace KolonnadeApp
@@ -11,17 +15,23 @@ namespace KolonnadeApp
         public ListCollectionView Selectables { get; set; }
         private string _searchText = "";
         private readonly WindowManager _windowManager = WindowManager.New();
+        private readonly List<Window> _windowList;
+        private const int WmHotkey = 0x0312;
+        private const uint VkSpace = 0x20;
 
         public MainWindow()
         {
-            KeyUp += OnKeyUp;
-            Selectables = new ListCollectionView(_windowManager.GetWindows().ToList())
+            _windowList = new List<Window>(_windowManager.GetWindows());
+            Selectables = new ListCollectionView(_windowList)
             {
                 Filter = SearchFilter
             };
+            KeyUp += OnKeyUp;
 
             InitializeComponent();
             SearchInput.Focus();
+
+            RegisterHotKey();
         }
 
         private bool SearchFilter(object x)
@@ -99,6 +109,66 @@ namespace KolonnadeApp
             {
                 SelectBox.SelectedIndex = 0;
             }
+        }
+
+        private void RegisterHotKey()
+        {
+            var interopHelper = new WindowInteropHelper(this);
+            var hwnd = interopHelper.EnsureHandle();
+            if (!RegisterHotKey(hwnd, 1, KeyModifiers.Shift | KeyModifiers.NoRepeat, VkSpace))
+            {
+                // XXX Handle that somehow?
+                Console.WriteLine("Well that wasn't successful :( :( :('");
+            }
+            var hwndSource = HwndSource.FromHwnd(hwnd);
+            hwndSource.AddHook(OnMessage);
+        }
+
+        private IntPtr OnMessage(IntPtr hwnd, int msg, IntPtr wparam, IntPtr lparam, ref bool handled)
+        {
+            if (msg == WmHotkey)
+            {
+                OnHotKey();
+            }
+            return IntPtr.Zero;
+        }
+
+        private void OnHotKey()
+        {
+            Reset();
+            Show();
+            SearchInput.Focus();
+            Activate();
+        }
+
+        private void Reset()
+        {
+            SearchInput.Text = "";
+            _windowList.Clear();
+            _windowList.AddRange(_windowManager.GetWindows());
+            InvalidateVisual();
+        }
+
+        [DllImport("USER32.DLL", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool RegisterHotKey(
+            [In] IntPtr hWnd, [In] int id, [In] KeyModifiers fsModifiers, [In] uint vk);
+
+        [Flags]
+        private enum KeyModifiers : uint
+        {
+            Shift = 4u,
+            NoRepeat = 0x4000u,
+        }
+
+        private void MainWindow_OnClosing(object sender, CancelEventArgs e)
+        {
+            e.Cancel = true;
+            Hide();
+        }
+
+        private void MainWindow_OnDeactivated(object sender, EventArgs e)
+        {
+            Hide();
         }
     }
 }
