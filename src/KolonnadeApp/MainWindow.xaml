@@ -13,11 +13,16 @@
     <Window.Resources>
         <SolidColorBrush x:Key="BackgroundHighlight" Color="#1f1f1f" />
     </Window.Resources>
-    <StackPanel>
-        <StackPanel.Background>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid.Background>
             <SolidColorBrush Opacity="0.8" Color="#2d2d2d" />
-        </StackPanel.Background>
+        </Grid.Background>
         <TextBox x:Name="SearchInput"
+                 VerticalAlignment="Top"
                  Background="{StaticResource BackgroundHighlight}" BorderBrush="Transparent" Foreground="Azure"
                  FontFamily="PragmataPro Liga" FontSize="48"
                  TextChanged="SearchInput_OnTextChanged">
@@ -44,39 +49,52 @@
                 </Style>
             </TextBox.Style>
         </TextBox>
-        <ListBox ItemsSource="{Binding Path=Selectables}"
-                 x:Name="SelectBox"
-                 Foreground="Azure" Background="Transparent" BorderBrush="Transparent">
-            <ListBox.ItemContainerStyle>
-                <Style TargetType="{x:Type ListBoxItem}">
-                    <Setter Property="Template">
-                        <Setter.Value>
-                            <ControlTemplate TargetType="{x:Type ListBoxItem}">
-                                <Grid x:Name="Content">
-                                    <Border Padding="12">
-                                        <ContentPresenter x:Name="ContentPresenter" />
-                                    </Border>
-                                </Grid>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsSelected" Value="true">
-                                        <Setter TargetName="Content" 
-                                                Property="Background" 
-                                                Value="{StaticResource BackgroundHighlight}" />
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </Setter.Value>
-                    </Setter>
-                </Style>
-            </ListBox.ItemContainerStyle>
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <WrapPanel>
-                        <local:HighlightedText Text="{Binding Title}" 
-                                               Highlight="{Binding ElementName=SearchInput, Path=Text}" />
-                    </WrapPanel>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
-    </StackPanel>
+        <ScrollViewer Grid.Row="1"
+                      CanContentScroll="True"
+                      VerticalAlignment="Top"
+                      VerticalScrollBarVisibility="Hidden" 
+                      HorizontalScrollBarVisibility="Hidden">
+            <ListBox ItemsSource="{Binding Path=Selectables}"
+                     x:Name="SelectBox"
+                     Foreground="Azure" Background="Transparent" BorderBrush="Transparent">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="{x:Type ListBoxItem}">
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                                    <Grid x:Name="Content">
+                                        <Border Padding="12">
+                                            <ContentPresenter x:Name="ContentPresenter" />
+                                        </Border>
+                                    </Grid>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsSelected" Value="true">
+                                            <Setter TargetName="Content"
+                                                    Property="Background"
+                                                    Value="{StaticResource BackgroundHighlight}" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBox Text="{Binding Desktop.N, Mode=OneWay}"
+                                     BorderBrush="Transparent" Background="DarkGray"
+                                     FontFamily="PragmataPro Liga" FontWeight="Bold" FontSize="18"
+                                     Padding="12" />
+                            <local:HighlightedText Margin="12, 0, 0, 0"
+                                                   VerticalAlignment="Center"
+                                                   Text="{Binding Title}"
+                                                   FontFamily="PragmataPro Liga" FontSize="14"
+                                                   Highlight="{Binding ElementName=SearchInput, Path=Text}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </ScrollViewer>
+    </Grid>
 </Window>
