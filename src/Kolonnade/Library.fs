@@ -5,9 +5,16 @@ open System.Collections.Generic
 open System.Runtime.InteropServices
 open System.Text
 
+module internal Kernel32 =
+    [<DllImport("kernel32.dll")>]
+    extern bool CloseHandle(IntPtr hObject)
+    [<DllImport("kernel32.DLL", SetLastError = true)>]
+    extern IntPtr OpenProcess(int dwDesiredAccess, bool bInheritHandle, int dwProcessId)
+
 module private User32 =
      type HWND = IntPtr
      type EnumWindowsProc = delegate of HWND * int -> bool
+     let PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 
      [<DllImport("USER32.DLL")>]
      extern bool EnumWindows(EnumWindowsProc enumFunc, int lParam)
@@ -19,6 +26,17 @@ module private User32 =
      extern HWND GetShellWindow()
      [<DllImport("USER32.DLL")>]
      extern bool SetForegroundWindow(HWND hWnd)
+     [<DllImport("USER32.DLL")>]
+     extern uint32 GetWindowThreadProcessId(HWND hWnd, int& lpdwProcessId)
+
+module private Psapi =
+    [<DllImport("psapi.dll", CharSet=CharSet.Unicode, SetLastError=true)>]
+    extern bool GetProcessImageFileNameW(IntPtr hProcess, StringBuilder lpImageFileName, uint32 size)
+
+    let get_process_image_file_name process_handle =
+        let builder = StringBuilder(4096)
+        GetProcessImageFileNameW(process_handle, builder, (uint32 builder.Capacity)) |> ignore
+        builder.ToString()
 
 module VirtualDesktop =
     module internal CLSIDs =
@@ -120,6 +138,17 @@ module internal WinUtils =
         | len when len > 0 -> stringBuilder.ToString() |> Some
         | _ -> None
 
+    let window_process hwnd =
+        let mutable pid = 0
+        User32.GetWindowThreadProcessId(hwnd, &pid) |> ignore
+        match Kernel32.OpenProcess(User32.PROCESS_QUERY_LIMITED_INFORMATION, false, pid) with
+        | handle when handle <> IntPtr.Zero ->
+            try
+                Some(Psapi.get_process_image_file_name(handle))
+            finally
+                Kernel32.CloseHandle(handle) |> ignore
+        | _ -> None
+
     let windows() =
         let shellWindow = User32.GetShellWindow()
         let windows = new List<User32.HWND * string>();
@@ -132,8 +161,9 @@ module internal WinUtils =
         User32.EnumWindows(new User32.EnumWindowsProc(handle_win), 0) |> ignore
         windows
 
-type Window internal (desktop: VirtualDesktop.Desktop, hwnd: User32.HWND, title: String) =
+type Window internal (process_name: string option, desktop: VirtualDesktop.Desktop, hwnd: User32.HWND, title: String) =
    member this.Desktop = desktop
+   member this.Process = Option.toObj process_name
    member this.Title = title
    member this.ToForeground() =
        // XXX maximize if minimized?
@@ -141,24 +171,43 @@ type Window internal (desktop: VirtualDesktop.Desktop, hwnd: User32.HWND, title:
        |> ignore
 
 type WindowManager internal (desktopManager: VirtualDesktop.Manager) =
-    let _switchToDesktop = function
+    let process_name_cache = LRUCache<User32.HWND, string option>(512)
+    let switch_to_desktop = function
     | i when i < 0 -> ()
     | i ->
         let desktops = desktopManager.GetDesktops()
         if i < desktops.Count then
             desktops.[i].SwitchTo()
 
+    let determine_process hwnd =
+        match process_name_cache.Get(hwnd) with
+        | Some(value) -> value
+        | None ->
+            let name = WinUtils.window_process hwnd
+            process_name_cache.Add(hwnd, name)
+            name
+    let clean_up_process_name = function
+    | Some(name : string) ->
+        let parts = name.Split [| '\\' |]
+        // Drop first two elements, as they are uninteresting
+        let concat = String.concat "\\" (Array.sub parts 3 (parts.Length - 3))
+        if concat.Length > 99 then
+            Some("…" + concat.Substring(concat.Length - 99))
+        else Some(concat)
+    | None -> None
+
     static member New () =
         WindowManager(VirtualDesktop.newManager())
 
     member this.GetWindows() =
         seq { for (hwnd, title) in WinUtils.windows() do
-                yield (desktopManager.GetDesktop(hwnd), hwnd, title)
+                yield (determine_process(hwnd), desktopManager.GetDesktop(hwnd), hwnd, title)
             }
         |> Seq.collect (function
-            | (None, _, _) -> Seq.empty
-            | (Some(desktop), hwnd, title) -> Seq.singleton(Window(desktop, hwnd, title))
+            | (_, None, _, _) -> Seq.empty
+            | (process_name, Some(desktop), hwnd, title) ->
+                Seq.singleton(Window(clean_up_process_name process_name, desktop, hwnd, title))
             )
 
     member this.SwitchToDesktop(i) =
-        _switchToDesktop i
+        switch_to_desktop i

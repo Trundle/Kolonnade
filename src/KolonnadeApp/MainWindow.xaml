@@ -11,6 +11,7 @@
         KeyDown="MainWindow_OnKeyDown"
         KeyUp="MainWindow_OnKeyUp"
         WindowStartupLocation="CenterScreen"
+        Style="{StaticResource BasicStyleForAllComponents}"
         Title="MainWindow" Height="450" Width="800"
         Background="Transparent"
         WindowStyle="None"
@@ -29,7 +30,7 @@
         <TextBox x:Name="SearchInput"
                  VerticalAlignment="Top"
                  Background="{StaticResource BackgroundHighlight}" BorderBrush="Transparent" Foreground="Azure"
-                 FontFamily="PragmataPro Liga" FontSize="48"
+                 FontSize="48"
                  TextChanged="SearchInput_OnTextChanged">
             <TextBox.Style>
                 <Style TargetType="{x:Type TextBox}">
@@ -54,58 +55,78 @@
                 </Style>
             </TextBox.Style>
         </TextBox>
-        <ScrollViewer Grid.Row="1"
-                      CanContentScroll="True"
-                      VerticalAlignment="Top"
-                      VerticalScrollBarVisibility="Hidden" 
-                      HorizontalScrollBarVisibility="Hidden">
-            <ListBox ItemsSource="{Binding Path=Selectables}"
-                     x:Name="SelectBox"
-                     Foreground="Azure" Background="Transparent" BorderBrush="Transparent">
-                <ListBox.ItemContainerStyle>
-                    <Style TargetType="{x:Type ListBoxItem}">
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="{x:Type ListBoxItem}">
-                                    <Grid x:Name="Content">
-                                        <Border Padding="12">
-                                            <ContentPresenter x:Name="ContentPresenter" />
-                                        </Border>
-                                    </Grid>
-                                    <ControlTemplate.Triggers>
-                                        <Trigger Property="IsSelected" Value="true">
-                                            <Setter TargetName="Content"
-                                                    Property="Background"
-                                                    Value="{StaticResource BackgroundHighlight}" />
-                                        </Trigger>
-                                    </ControlTemplate.Triggers>
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
-                    </Style>
-                </ListBox.ItemContainerStyle>
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBox Text="{Binding Path=Window.Desktop.N, Mode=OneWay}"
-                                     BorderBrush="Transparent" Background="DarkGray"
-                                     FontFamily="PragmataPro Liga" FontWeight="Bold" FontSize="18"
-                                     Padding="12" />
-                            <StackPanel Orientation="Vertical">
-                                <TextBlock FontFamily="PragmataPro Liga" FontSize="12" FontWeight="Bold"
-                                           Margin="12, 0, 0, 8"
-                                           Text="{Binding Path=ShortCut, Mode=OneWay}"
-                                           />
-                                <local:HighlightedText Margin="12, 0, 0, 0"
-                                                       VerticalAlignment="Center"
-                                                       Text="{Binding Path=Window.Title}"
-                                                       FontFamily="PragmataPro Liga" FontSize="14"
-                                                       Highlight="{Binding ElementName=SearchInput, Path=Text}" />
-                            </StackPanel>
-                        </StackPanel>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
-        </ScrollViewer>
+        <ListBox Grid.Row="1"
+                 ItemsSource="{Binding Path=Selectables}"
+                 x:Name="SelectBox"
+                 Foreground="Azure" Background="Transparent" BorderBrush="Transparent"
+                 ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="{x:Type ListBoxItem}">
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                                <Grid x:Name="Content" HorizontalAlignment="Stretch">
+                                    <Border Padding="12">
+                                        <ContentPresenter x:Name="ContentPresenter" />
+                                    </Border>
+                                </Grid>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsSelected" Value="true">
+                                        <Setter TargetName="Content"
+                                                Property="Background"
+                                                Value="{StaticResource BackgroundHighlight}" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <DockPanel LastChildFill="True">
+                        <!-- The desktop number -->
+                        <TextBox DockPanel.Dock="Right"
+                                 Margin="12, 0, 0, 0"
+                                 Text="{Binding Path=Window.Desktop.N, Mode=OneWay}"
+                                 BorderBrush="Transparent" Background="DarkGray"
+                                 FontWeight="Bold" FontSize="18"
+                                 Padding="12" />
+                        <!-- Remaining right side: All other information -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition />
+                                <RowDefinition />
+                            </Grid.RowDefinitions>
+                            <!-- At top, small, first two columns: shortcut and process -->
+                            <TextBlock Grid.Row="0" Grid.Column="0"
+                                       Margin="8, 0, 0, 0"
+                                       FontSize="12" FontWeight="Bold"
+                                       Text="{Binding Path=ShortCut, Mode=OneWay}" />
+                            <local:HighlightedText Grid.Row="0" Grid.Column="1"
+                                                   Text="{Binding Path=Window.Process, Mode=OneWay}"
+                                                   Highlight="{Binding ElementName=SearchInput, Path=Text}"
+                                                   TextAlignment="Right"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="#cecece" />
+                            <!-- Second row: the title (spans all columns) -->
+                            <local:HighlightedText Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                                                   Margin="12, 0, 0, 0"
+                                                   HorizontalAlignment="Left"
+                                                   VerticalAlignment="Center"
+                                                   Text="{Binding Path=Window.Title}"
+                                                   FontSize="14"
+                                                   Highlight="{Binding ElementName=SearchInput, Path=Text}"
+                                                   TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                    </DockPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
     </Grid>
 </Window>

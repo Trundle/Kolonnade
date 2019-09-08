@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Controls;
@@ -26,8 +25,8 @@ namespace KolonnadeApp
         {
             _windowList = new List<Window>(_windowManager.GetWindows());
             _viewList = new List<Item>();
-            UpdateViewList();
             Selectables = new ListCollectionView(_viewList);
+            UpdateViewList();
 
             InitializeComponent();
             SearchInput.Focus();
@@ -37,7 +36,8 @@ namespace KolonnadeApp
 
         private bool SearchFilter(Window w)
         {
-            return w.Title.ToLower().Contains(_searchText);
+            return w.Title.ToLower().Contains(_searchText)
+                   || (w.Process != null && w.Process.ToLower().Contains(_searchText));
         }
 
         private void MainWindow_OnKeyDown(object sender, KeyEventArgs e)
@@ -130,7 +130,6 @@ namespace KolonnadeApp
         {
             _searchText = ((TextBox) sender).Text.ToLower();
             UpdateViewList();
-            Selectables.Refresh();
             if (SelectBox.HasItems && SelectBox.SelectedIndex < 0)
             {
                 SelectBox.SelectedIndex = 0;
@@ -211,6 +210,7 @@ namespace KolonnadeApp
                     var shortCut = _searchText.Length == 0 ? " " : (i + 1).ToString();
                     return new Item(shortCut, w);
                 }));
+            Selectables.Refresh();
         }
     }
 
