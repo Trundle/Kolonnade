@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using Kolonnade;
 
 namespace KolonnadeApp
@@ -63,14 +64,14 @@ namespace KolonnadeApp
                         QuickSelect(choice);
                     }
 
-                    Hide();
+                    ResetAndHide();
                     break;
                 case Key.Escape:
-                    Hide();
+                    ResetAndHide();
                     break;
                 case Key.Enter:
                     SelectionToForeground();
-                    Hide();
+                    ResetAndHide();
                     break;
             }
         }
@@ -164,6 +165,7 @@ namespace KolonnadeApp
         {
             Reset();
             Show();
+            Opacity = 1;
             SearchInput.Focus();
             Activate();
         }
@@ -192,12 +194,15 @@ namespace KolonnadeApp
         private void MainWindow_OnClosing(object sender, CancelEventArgs e)
         {
             e.Cancel = true;
-            Hide();
+            ResetAndHide();
         }
 
         private void MainWindow_OnDeactivated(object sender, EventArgs e)
         {
-            Hide();
+            if (Opacity > 0)
+            {
+                ResetAndHide();
+            }
         }
 
         private void UpdateViewList()
@@ -211,6 +216,19 @@ namespace KolonnadeApp
                     return new Item(shortCut, w);
                 }));
             Selectables.Refresh();
+        }
+
+        private void ResetAndHide()
+        {
+            // Unfortunately, WPF doesn't update the window the soon it's invisible. That means, even
+            // if we reset the text input and other UI state here, WPF only updates the window once
+            // it's shown again and that results in a rather ugly flickering where the old search
+            // input can be seen for a split second.
+            // To work around that, first "hide" the window by setting its opacity to 0, then reset
+            // the UI state and in the next event loop run, finally hide the window.
+            Opacity = 0;
+            SearchInput.Text = string.Empty;
+            Dispatcher.BeginInvoke(Hide, DispatcherPriority.Input);
         }
     }
 
