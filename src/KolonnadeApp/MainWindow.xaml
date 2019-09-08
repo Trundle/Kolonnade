@@ -8,6 +8,8 @@
         DataContext="{Binding RelativeSource={RelativeSource Self}}"
         Closing="MainWindow_OnClosing"
         Deactivated="MainWindow_OnDeactivated"
+        KeyDown="MainWindow_OnKeyDown"
+        KeyUp="MainWindow_OnKeyUp"
         WindowStartupLocation="CenterScreen"
         Title="MainWindow" Height="450" Width="800"
         Background="Transparent"
@@ -85,15 +87,21 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <StackPanel Orientation="Horizontal">
-                            <TextBox Text="{Binding Desktop.N, Mode=OneWay}"
+                            <TextBox Text="{Binding Path=Window.Desktop.N, Mode=OneWay}"
                                      BorderBrush="Transparent" Background="DarkGray"
                                      FontFamily="PragmataPro Liga" FontWeight="Bold" FontSize="18"
                                      Padding="12" />
-                            <local:HighlightedText Margin="12, 0, 0, 0"
-                                                   VerticalAlignment="Center"
-                                                   Text="{Binding Title}"
-                                                   FontFamily="PragmataPro Liga" FontSize="14"
-                                                   Highlight="{Binding ElementName=SearchInput, Path=Text}" />
+                            <StackPanel Orientation="Vertical">
+                                <TextBlock FontFamily="PragmataPro Liga" FontSize="12" FontWeight="Bold"
+                                           Margin="12, 0, 0, 8"
+                                           Text="{Binding Path=ShortCut, Mode=OneWay}"
+                                           />
+                                <local:HighlightedText Margin="12, 0, 0, 0"
+                                                       VerticalAlignment="Center"
+                                                       Text="{Binding Path=Window.Title}"
+                                                       FontFamily="PragmataPro Liga" FontSize="14"
+                                                       Highlight="{Binding ElementName=SearchInput, Path=Text}" />
+                            </StackPanel>
                         </StackPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>

@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -16,17 +18,16 @@ namespace KolonnadeApp
         private string _searchText = "";
         private readonly WindowManager _windowManager = WindowManager.New();
         private readonly List<Window> _windowList;
+        private readonly List<Item> _viewList;
         private const int WmHotkey = 0x0312;
         private const uint VkSpace = 0x20;
 
         public MainWindow()
         {
             _windowList = new List<Window>(_windowManager.GetWindows());
-            Selectables = new ListCollectionView(_windowList)
-            {
-                Filter = SearchFilter
-            };
-            KeyUp += OnKeyUp;
+            _viewList = new List<Item>();
+            UpdateViewList();
+            Selectables = new ListCollectionView(_viewList);
 
             InitializeComponent();
             SearchInput.Focus();
@@ -34,12 +35,12 @@ namespace KolonnadeApp
             RegisterHotKey();
         }
 
-        private bool SearchFilter(object x)
+        private bool SearchFilter(Window w)
         {
-            return (x as Window).Title.ToLower().Contains(_searchText);
+            return w.Title.ToLower().Contains(_searchText);
         }
 
-        private void OnKeyUp(object sender, KeyEventArgs e)
+        private void MainWindow_OnKeyDown(object sender, KeyEventArgs e)
         {
             switch (e.Key)
             {
@@ -52,7 +53,16 @@ namespace KolonnadeApp
                 case Key.D7:
                 case Key.D8:
                 case Key.D9:
-                    _windowManager.SwitchToDesktop(e.Key - Key.D1);
+                    var choice = e.Key - Key.D1;
+                    if (string.IsNullOrEmpty(_searchText))
+                    {
+                        _windowManager.SwitchToDesktop(choice);
+                    }
+                    else
+                    {
+                        QuickSelect(choice);
+                    }
+
                     Hide();
                     break;
                 case Key.Escape:
@@ -62,12 +72,27 @@ namespace KolonnadeApp
                     SelectionToForeground();
                     Hide();
                     break;
+            }
+        }
+
+        private void MainWindow_OnKeyUp(object sender, KeyEventArgs e)
+        {
+            switch (e.Key)
+            {
                 case Key.Down:
                     SelectNext();
                     break;
                 case Key.Up:
                     SelectPrevious();
                     break;
+            }
+        }
+
+        private void QuickSelect(in int choice)
+        {
+            if (choice < Selectables.Count)
+            {
+                (Selectables.GetItemAt(choice) as Item).Window.ToForeground();
             }
         }
 
@@ -98,12 +123,13 @@ namespace KolonnadeApp
 
         private void SelectionToForeground()
         {
-            (SelectBox.SelectedItem as Window).ToForeground();
+            (SelectBox.SelectedItem as Item).Window.ToForeground();
         }
 
         private void SearchInput_OnTextChanged(object sender, TextChangedEventArgs e)
         {
             _searchText = ((TextBox) sender).Text.ToLower();
+            UpdateViewList();
             Selectables.Refresh();
             if (SelectBox.HasItems && SelectBox.SelectedIndex < 0)
             {
@@ -120,6 +146,7 @@ namespace KolonnadeApp
                 // XXX Handle that somehow?
                 Console.WriteLine("Well that wasn't successful :( :( :('");
             }
+
             var hwndSource = HwndSource.FromHwnd(hwnd);
             hwndSource.AddHook(OnMessage);
         }
@@ -130,6 +157,7 @@ namespace KolonnadeApp
             {
                 OnHotKey();
             }
+
             return IntPtr.Zero;
         }
 
@@ -144,8 +172,10 @@ namespace KolonnadeApp
         private void Reset()
         {
             SearchInput.Text = "";
+            // XXX this could replace the list now
             _windowList.Clear();
             _windowList.AddRange(_windowManager.GetWindows());
+            UpdateViewList();
             InvalidateVisual();
         }
 
@@ -169,6 +199,30 @@ namespace KolonnadeApp
         private void MainWindow_OnDeactivated(object sender, EventArgs e)
         {
             Hide();
+        }
+
+        private void UpdateViewList()
+        {
+            _viewList.Clear();
+            _viewList.AddRange(_windowList
+                .Where(SearchFilter)
+                .Select((w, i) =>
+                {
+                    var shortCut = _searchText.Length == 0 ? " " : (i + 1).ToString();
+                    return new Item(shortCut, w);
+                }));
+        }
+    }
+
+    class Item
+    {
+        public string ShortCut { get; }
+        public Window Window { get; }
+
+        public Item(string shortCut, Window window)
+        {
+            ShortCut = shortCut;
+            Window = window;
         }
     }
 }
