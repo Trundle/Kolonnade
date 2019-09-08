@@ -57,17 +57,18 @@ namespace KolonnadeApp
                 case Key.D7:
                 case Key.D8:
                 case Key.D9:
-                    var choice = e.Key - Key.D1;
-                    if (string.IsNullOrEmpty(_searchText))
-                    {
-                        _windowManager.SwitchToDesktop(choice);
-                    }
-                    else
-                    {
-                        QuickSelect(choice);
-                    }
-
-                    ResetAndHide();
+                    HandleNumberPress(e.Key - Key.D1);
+                    break;
+                case Key.NumPad1:
+                case Key.NumPad2:
+                case Key.NumPad3:
+                case Key.NumPad4:
+                case Key.NumPad5:
+                case Key.NumPad6:
+                case Key.NumPad7:
+                case Key.NumPad8:
+                case Key.NumPad9:
+                    HandleNumberPress(e.Key - Key.NumPad1);
                     break;
                 case Key.Escape:
                     ResetAndHide();
@@ -77,6 +78,20 @@ namespace KolonnadeApp
                     ResetAndHide();
                     break;
             }
+        }
+
+        private void HandleNumberPress(int choice)
+        {
+            if (string.IsNullOrEmpty(_searchText))
+            {
+                _windowManager.SwitchToDesktop(choice);
+            }
+            else
+            {
+                QuickSelect(choice);
+            }
+
+            ResetAndHide();
         }
 
         private void MainWindow_OnKeyUp(object sender, KeyEventArgs e)
