@@ -97,6 +97,7 @@
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
@@ -105,17 +106,21 @@
                             </Grid.RowDefinitions>
                             <!-- At top, small, first two columns: shortcut and process -->
                             <TextBlock Grid.Row="0" Grid.Column="0"
-                                       Margin="8, 0, 0, 0"
                                        FontSize="12" FontWeight="Bold"
                                        Text="{Binding Path=ShortCut, Mode=OneWay}" />
-                            <local:HighlightedText Grid.Row="0" Grid.Column="1"
+                            <local:HighlightedText Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2"
                                                    Text="{Binding Path=Window.Process, Mode=OneWay}"
                                                    Highlight="{Binding ElementName=SearchInput, Path=Text}"
                                                    TextAlignment="Right"
                                                    TextTrimming="CharacterEllipsis"
                                                    Foreground="#cecece" />
-                            <!-- Second row: the title (spans all columns) -->
-                            <local:HighlightedText Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                            <!-- Second row: the icon and title -->
+                            <!-- The window icon -->
+                            <Image Grid.Row="1" Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Width="32" Height="32"
+                                   Source="{Binding Path=Window.Icon, Mode=OneWay}" />
+                            <local:HighlightedText Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
                                                    Margin="12, 0, 0, 0"
                                                    HorizontalAlignment="Left"
                                                    VerticalAlignment="Center"

@@ -3,12 +3,15 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Kolonnade;
+using Window = Kolonnade.Window<System.Windows.Media.Imaging.BitmapSource>;
 
 namespace KolonnadeApp
 {
@@ -16,7 +19,7 @@ namespace KolonnadeApp
     {
         public ListCollectionView Selectables { get; set; }
         private string _searchText = "";
-        private readonly WindowManager _windowManager = WindowManager.New();
+        private readonly WindowManager<BitmapSource> _windowManager = WindowManager<BitmapSource>.New(IconLoader);
         private readonly List<Window> _windowList;
         private readonly List<Item> _viewList;
         private const int WmHotkey = 0x0312;
@@ -229,6 +232,14 @@ namespace KolonnadeApp
             Opacity = 0;
             SearchInput.Text = string.Empty;
             Dispatcher.BeginInvoke(Hide, DispatcherPriority.Input);
+        }
+
+        private static BitmapSource IconLoader(IntPtr iconHandle)
+        {
+            return Imaging.CreateBitmapSourceFromHIcon(
+                iconHandle,
+                Int32Rect.Empty,
+                BitmapSizeOptions.FromEmptyOptions());
         }
     }
 

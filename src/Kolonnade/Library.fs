@@ -1,6 +1,7 @@
 ﻿namespace Kolonnade
 
 open System
+open System
 open System.Collections.Generic
 open System.Runtime.InteropServices
 open System.Text
@@ -15,6 +16,11 @@ module private User32 =
      type HWND = IntPtr
      type EnumWindowsProc = delegate of HWND * int -> bool
      let PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+     let ICON_BIG = 1
+     let ICON_SMALL = 0
+     let ICON_SMALL2 = 2
+     let WM_GETICON = 0x007F
+     let GCL_HICON = -14
 
      [<DllImport("USER32.DLL")>]
      extern bool EnumWindows(EnumWindowsProc enumFunc, int lParam)
@@ -28,6 +34,12 @@ module private User32 =
      extern bool SetForegroundWindow(HWND hWnd)
      [<DllImport("USER32.DLL")>]
      extern uint32 GetWindowThreadProcessId(HWND hWnd, int& lpdwProcessId)
+     [<DllImport("USER32.DLL")>]
+     extern IntPtr SendMessageTimeout(HWND hWnd, int msg, IntPtr wParam, IntPtr lParam, int flags, int timeout, IntPtr& pdwResult)
+     [<DllImport("USER32.DLL")>]
+     extern bool DestroyIcon(IntPtr hIcon)
+     [<DllImport("USER32.DLL")>]
+     extern IntPtr GetClassLongPtr(HWND hWnd, int index)
 
 module private Psapi =
     [<DllImport("psapi.dll", CharSet=CharSet.Unicode, SetLastError=true)>]
@@ -149,6 +161,27 @@ module internal WinUtils =
                 Kernel32.CloseHandle(handle) |> ignore
         | _ -> None
 
+    let window_icon hwnd icon_loader =
+        let send_icon_msg (icon : int) =
+            let mutable result = IntPtr.Zero
+            match User32.SendMessageTimeout(hwnd, User32.WM_GETICON, IntPtr(icon), IntPtr.Zero,
+                                            0, 50, &result) with
+            | hr when hr <> IntPtr.Zero && result <> IntPtr.Zero -> Some(result)
+            | _ -> None
+        let icon_from_class_ptr () =
+            match User32.GetClassLongPtr(hwnd, User32.GCL_HICON) with
+            | handle when handle <> IntPtr.Zero -> Some handle
+            | _ -> None
+        let load_icon handle =
+            try
+                icon_loader handle
+            finally
+                User32.DestroyIcon(handle) |> ignore
+        send_icon_msg User32.ICON_BIG
+        |> Option.orElseWith (fun _ -> send_icon_msg User32.ICON_SMALL2)
+        |> Option.orElseWith icon_from_class_ptr
+        |> Option.map load_icon
+
     let windows() =
         let shellWindow = User32.GetShellWindow()
         let windows = new List<User32.HWND * string>();
@@ -161,17 +194,25 @@ module internal WinUtils =
         User32.EnumWindows(new User32.EnumWindowsProc(handle_win), 0) |> ignore
         windows
 
-type Window internal (process_name: string option, desktop: VirtualDesktop.Desktop, hwnd: User32.HWND, title: String) =
+type Window<'I> when 'I: null internal (process_name: string option,
+                                        desktop: VirtualDesktop.Desktop,
+                                        hwnd: User32.HWND,
+                                        title: String,
+                                        icon: 'I option) =
    member this.Desktop = desktop
    member this.Process = Option.toObj process_name
    member this.Title = title
+   member this.Icon = Option.toObj icon
    member this.ToForeground() =
        // XXX maximize if minimized?
        User32.SetForegroundWindow(hwnd)
        |> ignore
 
-type WindowManager internal (desktopManager: VirtualDesktop.Manager) =
+// Parametrized on icon type, as this library doesn't have a dependency to WPF
+type WindowManager<'I> when 'I: null internal (desktopManager: VirtualDesktop.Manager,
+                                               iconLoader: (User32.HWND -> 'I)) =
     let process_name_cache = LRUCache<User32.HWND, string option>(512)
+    let window_icon_cache = LRUCache<User32.HWND, 'I option>(512)
     let switch_to_desktop = function
     | i when i < 0 -> ()
     | i ->
@@ -186,6 +227,15 @@ type WindowManager internal (desktopManager: VirtualDesktop.Manager) =
             let name = WinUtils.window_process hwnd
             process_name_cache.Add(hwnd, name)
             name
+
+    let get_icon hwnd =
+        match window_icon_cache.Get(hwnd) with
+        | Some(value) -> value
+        | None ->
+            let icon = WinUtils.window_icon hwnd iconLoader
+            window_icon_cache.Add(hwnd, icon)
+            icon
+
     let clean_up_process_name = function
     | Some(name : string) ->
         let parts = name.Split [| '\\' |]
@@ -196,17 +246,19 @@ type WindowManager internal (desktopManager: VirtualDesktop.Manager) =
         else Some(concat)
     | None -> None
 
-    static member New () =
-        WindowManager(VirtualDesktop.newManager())
+    static member New(iconLoader: System.Func<User32.HWND, 'I>) =
+        WindowManager(VirtualDesktop.newManager(), fun h -> iconLoader.Invoke(h))
 
     member this.GetWindows() =
         seq { for (hwnd, title) in WinUtils.windows() do
-                yield (determine_process(hwnd), desktopManager.GetDesktop(hwnd), hwnd, title)
+                yield (desktopManager.GetDesktop(hwnd), hwnd, title)
             }
         |> Seq.collect (function
-            | (_, None, _, _) -> Seq.empty
-            | (process_name, Some(desktop), hwnd, title) ->
-                Seq.singleton(Window(clean_up_process_name process_name, desktop, hwnd, title))
+            | (None, _, _) -> Seq.empty
+            | (Some(desktop), hwnd, title) ->
+                let process_name = determine_process(hwnd)
+                let icon = get_icon hwnd
+                Seq.singleton(Window(clean_up_process_name process_name, desktop, hwnd, title, icon))
             )
 
     member this.SwitchToDesktop(i) =
