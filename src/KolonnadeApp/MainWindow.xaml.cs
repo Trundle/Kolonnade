@@ -22,6 +22,7 @@ namespace KolonnadeApp
         private readonly WindowManager<BitmapSource> _windowManager = WindowManager<BitmapSource>.New(IconLoader);
         private readonly List<Window> _windowList;
         private readonly List<Item> _viewList;
+        private readonly History _history = new History(16);
         private const int WmHotkey = 0x0312;
         private const uint VkSpace = 0x20;
 
@@ -142,7 +143,9 @@ namespace KolonnadeApp
 
         private void SelectionToForeground()
         {
-            (SelectBox.SelectedItem as Item).Window.ToForeground();
+            var window = (SelectBox.SelectedItem as Item).Window;
+            _history.Append(window);
+            window.ToForeground();
         }
 
         private void SearchInput_OnTextChanged(object sender, TextChangedEventArgs e)
@@ -232,7 +235,9 @@ namespace KolonnadeApp
                 {
                     var shortCut = _searchText.Length == 0 ? " " : (i + 1).ToString();
                     return new Item(shortCut, w);
-                }));
+                })
+                .OrderBy(item => item.Window, _history.Comparer)
+            );
             Selectables.Refresh();
         }
 
@@ -267,6 +272,77 @@ namespace KolonnadeApp
         {
             ShortCut = shortCut;
             Window = window;
+        }
+    }
+
+    class History
+    {
+        public int MaxSize { get; }
+        private readonly LinkedList<Id> _history = new LinkedList<Id>();
+
+        public History(int maxSize)
+        {
+            MaxSize = maxSize;
+        }
+
+        public IComparer<Window> Comparer
+        {
+            get => new HistoryComparer(() => _history);
+        }
+
+        public void Append(Window value)
+        {
+            _history.Remove(value.Id);
+            _history.AddFirst(value.Id);
+            if (_history.Count > MaxSize)
+            {
+                _history.RemoveLast();
+            }
+        }
+
+        class HistoryComparer: IComparer<Window>
+        {
+            private readonly Func<LinkedList<Id>> _history;
+
+            public HistoryComparer(Func<LinkedList<Id>> history)
+            {
+                _history = history;
+            }
+
+            public int Compare(Window x, Window y)
+            {
+                if (x == null && y == null)
+                {
+                    return 0;
+                }
+
+                if (x == null)
+                {
+                    return -1;
+                }
+
+                if (y == null)
+                {
+                    return 1;
+                }
+
+                var yIndex = _history().TakeWhile(e => !e.Equals(y.Id)).Count();
+                var xIndex = _history().TakeWhile(e => !e.Equals(x.Id)).Count();
+
+                // It's rather unlikely that one wants to switch to the same window again,
+                // hence swap first and second window
+                if (xIndex == 0 && yIndex == 1)
+                {
+                    return 1;
+                }
+
+                if (yIndex == 0 && xIndex == 1)
+                {
+                    return -1;
+                }
+
+                return xIndex.CompareTo(yIndex);
+            }
         }
     }
 }

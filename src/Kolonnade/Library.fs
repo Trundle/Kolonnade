@@ -194,6 +194,10 @@ module internal WinUtils =
         User32.EnumWindows(new User32.EnumWindowsProc(handle_win), 0) |> ignore
         windows
 
+// Opaque type to hide the underlying IntPtr
+[<NoComparison; StructuralEquality>]
+type Id = private Id of IntPtr
+
 type Window<'I> when 'I: null internal (process_name: string option,
                                         desktop: VirtualDesktop.Desktop,
                                         hwnd: User32.HWND,
@@ -203,6 +207,7 @@ type Window<'I> when 'I: null internal (process_name: string option,
    member this.Process = Option.toObj process_name
    member this.Title = title
    member this.Icon = Option.toObj icon
+   member this.Id = Id hwnd
    member this.ToForeground() =
        // XXX maximize if minimized?
        User32.SetForegroundWindow(hwnd)
