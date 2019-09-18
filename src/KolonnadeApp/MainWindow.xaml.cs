@@ -75,7 +75,7 @@ namespace KolonnadeApp
                     ResetAndHide();
                     break;
                 case Key.Enter:
-                    SelectionToForeground();
+                    ToForeground(SelectBox.SelectedIndex);
                     ResetAndHide();
                     break;
             }
@@ -112,7 +112,7 @@ namespace KolonnadeApp
         {
             if (choice < Selectables.Count)
             {
-                (Selectables.GetItemAt(choice) as Item).Window.ToForeground();
+                ToForeground(choice);
             }
         }
 
@@ -141,9 +141,9 @@ namespace KolonnadeApp
             }
         }
 
-        private void SelectionToForeground()
+        private void ToForeground(int index)
         {
-            var window = (SelectBox.SelectedItem as Item).Window;
+            var window = (Selectables.GetItemAt(index) as Item).Window;
             _history.Append(window);
             window.ToForeground();
         }
