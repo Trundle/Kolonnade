@@ -231,12 +231,12 @@ namespace KolonnadeApp
             _viewList.Clear();
             _viewList.AddRange(_windowList
                 .Where(SearchFilter)
+                .OrderBy(x => x, _history.Comparer)
                 .Select((w, i) =>
                 {
                     var shortCut = _searchText.Length == 0 ? " " : (i + 1).ToString();
                     return new Item(shortCut, w);
                 })
-                .OrderBy(item => item.Window, _history.Comparer)
             );
             Selectables.Refresh();
         }
