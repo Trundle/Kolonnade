@@ -1,13 +1,12 @@
 ﻿namespace Kolonnade
 
 open System
-open System
 open System.Collections.Generic
 open System.Runtime.InteropServices
 open System.Text
 
 module internal Kernel32 =
-    [<DllImport("kernel32.dll")>]
+    [<DllImport("kernel32.dll", SetLastError = true)>]
     extern bool CloseHandle(IntPtr hObject)
     [<DllImport("kernel32.DLL", SetLastError = true)>]
     extern IntPtr OpenProcess(int dwDesiredAccess, bool bInheritHandle, int dwProcessId)
@@ -21,6 +20,20 @@ module private User32 =
      let ICON_SMALL2 = 2
      let WM_GETICON = 0x007F
      let GCL_HICON = -14
+     let MONITOR_DEFAULTTONULL = 0
+     [<Struct; StructLayout(LayoutKind.Sequential)>]
+     type RECT =
+         { left: int
+           top: int
+           right: int
+           bottom: int }
+
+     [<Struct; StructLayout(LayoutKind.Sequential)>]
+     type MONITORINFO =
+         val mutable cbSize: int
+         val rcMonitor: RECT
+         val rcWork: RECT
+         val dwFlags: int
 
      [<DllImport("USER32.DLL")>]
      extern bool EnumWindows(EnumWindowsProc enumFunc, int lParam)
@@ -31,6 +44,8 @@ module private User32 =
      [<DllImport("USER32.DLL")>]
      extern HWND GetShellWindow()
      [<DllImport("USER32.DLL")>]
+     extern HWND GetForegroundWindow()
+     [<DllImport("USER32.DLL")>]
      extern bool SetForegroundWindow(HWND hWnd)
      [<DllImport("USER32.DLL")>]
      extern uint32 GetWindowThreadProcessId(HWND hWnd, int& lpdwProcessId)
@@ -40,6 +55,10 @@ module private User32 =
      extern bool DestroyIcon(IntPtr hIcon)
      [<DllImport("USER32.DLL")>]
      extern IntPtr GetClassLongPtr(HWND hWnd, int index)
+     [<DllImport("USER32.DLL")>]
+     extern IntPtr MonitorFromWindow(HWND hWnd, int flags)
+     [<DllImport("USER32.DLL")>]
+     extern bool GetMonitorInfo(IntPtr hMonitor, MONITORINFO& lpmi)
 
 module private Psapi =
     [<DllImport("psapi.dll", CharSet=CharSet.Unicode, SetLastError=true)>]
@@ -49,6 +68,13 @@ module private Psapi =
         let builder = StringBuilder(4096)
         GetProcessImageFileNameW(process_handle, builder, (uint32 builder.Capacity)) |> ignore
         builder.ToString()
+
+module private Shcore =
+    type MONITOR_DPI_TYPE = MDT_EFFECTIVE_DPI = 0
+
+    [<DllImport("shcore.dll")>]
+    extern uint32 GetDpiForMonitor(IntPtr hMonitor, MONITOR_DPI_TYPE dpiType, uint32& dpiX, uint32& dpiY)
+
 
 module VirtualDesktop =
     module internal CLSIDs =
@@ -198,6 +224,12 @@ module internal WinUtils =
 [<NoComparison; StructuralEquality>]
 type Id = private Id of IntPtr
 
+type Rect =
+    { Left: double
+      Right: double
+      Top: double
+      Bottom: double }
+
 type Window<'I> when 'I: null internal (process_name: string option,
                                         desktop: VirtualDesktop.Desktop,
                                         hwnd: User32.HWND,
@@ -251,8 +283,17 @@ type WindowManager<'I> when 'I: null internal (desktopManager: VirtualDesktop.Ma
         else Some(concat)
     | None -> None
 
+    let rect_from_monitor_handle handle =
+        let mutable monitor_info = Unchecked.defaultof<User32.MONITORINFO>
+        monitor_info.cbSize <- sizeof<User32.MONITORINFO>
+        match User32.GetMonitorInfo(handle, &monitor_info) with
+        | true -> Some(monitor_info.rcWork)
+        | false -> None
+
     static member New(iconLoader: System.Func<User32.HWND, 'I>) =
         WindowManager(VirtualDesktop.newManager(), fun h -> iconLoader.Invoke(h))
+
+    static member EmptyRect = { Left = 0.0; Right = 0.0; Top = 0.0; Bottom = 0.0 }
 
     member this.GetWindows() =
         seq { for (hwnd, title) in WinUtils.windows() do
@@ -268,3 +309,23 @@ type WindowManager<'I> when 'I: null internal (desktopManager: VirtualDesktop.Ma
 
     member this.SwitchToDesktop(i) =
         switch_to_desktop i
+
+    member this.GetActiveMonitor() =
+        match User32.GetForegroundWindow() with
+        | hWnd when hWnd <> IntPtr.Zero ->
+            match User32.MonitorFromWindow(hWnd, User32.MONITOR_DEFAULTTONULL) with
+            | monitor_handle when monitor_handle <> IntPtr.Zero ->
+                match rect_from_monitor_handle monitor_handle with
+                | Some(rect) ->
+                    // WPF uses device-independent pixels, convert
+                    let mutable dpiX = 0u
+                    let mutable dpiY = 0u
+                    Shcore.GetDpiForMonitor(monitor_handle, Shcore.MONITOR_DPI_TYPE.MDT_EFFECTIVE_DPI, &dpiX, &dpiY)
+                    |> ignore
+                    let scaleX = 96.0 / double dpiX
+                    let scaleY = 96.0 / double dpiY
+                    { Left = double rect.left * scaleX; Right = double rect.right * scaleX;
+                      Top = double rect.top * scaleY; Bottom = double rect.bottom * scaleY }
+                | None -> WindowManager<'I>.EmptyRect
+            | _ -> WindowManager<'I>.EmptyRect
+        | _ -> WindowManager<'I>.EmptyRect

@@ -184,6 +184,14 @@ namespace KolonnadeApp
 
         private void OnHotKey()
         {
+            var monitorRect = _windowManager.GetActiveMonitor();
+            if (!monitorRect.Equals(WindowManager<BitmapSource>.EmptyRect))
+            {
+                var width = monitorRect.Right - monitorRect.Left - Width;
+                var height = monitorRect.Bottom - monitorRect.Top - Height;
+                Left = monitorRect.Left + (width / 2.0);
+                Top = monitorRect.Top + (height / 2.0);
+            }
             Reset();
             Show();
             Opacity = 1;
