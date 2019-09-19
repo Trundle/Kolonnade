@@ -75,7 +75,11 @@ namespace KolonnadeApp
                     ResetAndHide();
                     break;
                 case Key.Enter:
-                    ToForeground(SelectBox.SelectedIndex);
+                    if (SelectBox.SelectedIndex >= 0)
+                    {
+                        ToForeground(SelectBox.SelectedIndex);
+                    }
+
                     ResetAndHide();
                     break;
             }
