@@ -170,8 +170,8 @@ module VirtualDesktop =
 
 
 module internal WinUtils =
-    let private window_title hwnd =
-        let stringBuilder = new StringBuilder(2048)
+    let window_title hwnd =
+        let stringBuilder = new StringBuilder(1024)
         match User32.GetWindowText(hwnd, stringBuilder, stringBuilder.Capacity) with
         | len when len > 0 -> stringBuilder.ToString() |> Some
         | _ -> None
@@ -219,6 +219,11 @@ module internal WinUtils =
             true
         User32.EnumWindows(new User32.EnumWindowsProc(handle_win), 0) |> ignore
         windows
+
+type ShellEvent =
+    | Activated of User32.HWND
+    | TitleChanged of User32.HWND
+    | Unknown of int * User32.HWND
 
 // Opaque type to hide the underlying IntPtr
 [<NoComparison; StructuralEquality>]
@@ -329,3 +334,9 @@ type WindowManager<'I> when 'I: null internal (desktopManager: VirtualDesktop.Ma
                 | None -> WindowManager<'I>.EmptyRect
             | _ -> WindowManager<'I>.EmptyRect
         | _ -> WindowManager<'I>.EmptyRect
+
+    member this.HandleEvent(event: ShellEvent) =
+        match event with
+        | Unknown(code, hwnd) ->
+            printfn "unknown event: %A %A" code (WinUtils.window_title hwnd)
+        | _ -> ()

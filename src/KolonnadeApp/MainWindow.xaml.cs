@@ -19,15 +19,18 @@ namespace KolonnadeApp
     {
         public ListCollectionView Selectables { get; set; }
         private string _searchText = "";
+        private readonly MessagePump _messagePump = new MessagePump();
         private readonly WindowManager<BitmapSource> _windowManager = WindowManager<BitmapSource>.New(IconLoader);
         private readonly List<Window> _windowList;
         private readonly List<Item> _viewList;
         private readonly History _history = new History(16);
         private const int WmHotkey = 0x0312;
         private const uint VkSpace = 0x20;
-
+        
         public MainWindow()
         {
+            _messagePump.ShellEvent += _windowManager.HandleEvent;
+
             _windowList = new List<Window>(_windowManager.GetWindows());
             _viewList = new List<Item>();
             Selectables = new ListCollectionView(_viewList);
