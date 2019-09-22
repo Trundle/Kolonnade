@@ -1,4 +1,4 @@
-namespace Kolonnade
+﻿namespace Kolonnade
 
 open System
 open System.Drawing
@@ -284,4 +284,12 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
                 handleMainWindowSizeChange hWnd
             | _ -> refresh ()
             moving <- None
+        | WindowCloaked hWnd ->
+            match (desktopManager.GetDesktop(hWnd), stackSet.FindWorkspace(hWnd)) with
+            | (Some d, Some ws) when d.N - 1 <> ws.tag ->
+                // Window was moved to a different virtual desktop
+                stackSet <-
+                    stackSet.Delete(hWnd).OnWorkspace(d.N - 1, fun s -> s.InsertUp(hWnd))
+                refresh ()
+            | _ -> ()
         | _ -> ()
