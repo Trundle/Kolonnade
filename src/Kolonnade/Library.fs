@@ -1,4 +1,4 @@
-﻿namespace Kolonnade
+namespace Kolonnade
 
 open System
 open System.Drawing
@@ -248,6 +248,14 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
 
     member this.FocusMain() =
         stackSet <- stackSet.FocusMain()
+        refresh ()
+
+    member this.CycleLayout() =
+        let newLayout: Layout =
+            if stackSet.current.workspace.layout.GetType() = typeof<Tall> then Full() :> Layout
+            else Tall(0.7) :> Layout
+        stackSet <-
+            { stackSet with current = { stackSet.current with workspace = { stackSet.current.workspace with layout = newLayout } } }
         refresh ()
 
     member internal this.HandleEvent(event: WorldEvent) =

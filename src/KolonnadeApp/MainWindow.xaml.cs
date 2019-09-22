@@ -34,6 +34,7 @@ namespace KolonnadeApp
             FocusUp,
             FocusDown,
             FocusMain,
+            CycleLayout,
         }
 
         public MainWindow()
@@ -183,6 +184,7 @@ namespace KolonnadeApp
             }
 
             var mod = KeyModifiers.Alt | KeyModifiers.NoRepeat;
+            RegisterHotKey(hWnd, (int) HotKeys.CycleLayout, mod, VkSpace);
             RegisterHotKey(hWnd, (int) HotKeys.RaiseToMain, mod, VkReturn);
             RegisterHotKey(hWnd, (int) HotKeys.FocusDown, mod, 'J');
             RegisterHotKey(hWnd, (int) HotKeys.FocusUp, mod, 'K');
@@ -212,6 +214,9 @@ namespace KolonnadeApp
                         break;
                     case HotKeys.FocusMain:
                         _windowManager.FocusMain();
+                        break;
+                    case HotKeys.CycleLayout:
+                        _windowManager.CycleLayout();
                         break;
                 }
             }
