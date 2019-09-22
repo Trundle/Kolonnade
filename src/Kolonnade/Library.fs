@@ -1,260 +1,106 @@
 ﻿namespace Kolonnade
 
 open System
-open System.Collections.Generic
+open System.Drawing
 open System.Runtime.InteropServices
-open System.Text
 
-module internal Kernel32 =
-    [<DllImport("kernel32.dll", SetLastError = true)>]
-    extern bool CloseHandle(IntPtr hObject)
-    [<DllImport("kernel32.DLL", SetLastError = true)>]
-    extern IntPtr OpenProcess(int dwDesiredAccess, bool bInheritHandle, int dwProcessId)
-
-module private User32 =
-     type HWND = IntPtr
-     type EnumWindowsProc = delegate of HWND * int -> bool
-     let PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-     let ICON_BIG = 1
-     let ICON_SMALL = 0
-     let ICON_SMALL2 = 2
-     let WM_GETICON = 0x007F
-     let GCL_HICON = -14
-     let MONITOR_DEFAULTTONULL = 0
-     [<Struct; StructLayout(LayoutKind.Sequential)>]
-     type RECT =
-         { left: int
-           top: int
-           right: int
-           bottom: int }
-
-     [<Struct; StructLayout(LayoutKind.Sequential)>]
-     type MONITORINFO =
-         val mutable cbSize: int
-         val rcMonitor: RECT
-         val rcWork: RECT
-         val dwFlags: int
-
-     [<DllImport("USER32.DLL")>]
-     extern bool EnumWindows(EnumWindowsProc enumFunc, int lParam)
-     [<DllImport("USER32.DLL")>]
-     extern bool IsWindowVisible(HWND hWnd)
-     [<DllImport("USER32.DLL")>]
-     extern int GetWindowText(HWND hWnd, StringBuilder lpString, int nMaxCount)
-     [<DllImport("USER32.DLL")>]
-     extern HWND GetShellWindow()
-     [<DllImport("USER32.DLL")>]
-     extern HWND GetForegroundWindow()
-     [<DllImport("USER32.DLL")>]
-     extern bool SetForegroundWindow(HWND hWnd)
-     [<DllImport("USER32.DLL")>]
-     extern uint32 GetWindowThreadProcessId(HWND hWnd, int& lpdwProcessId)
-     [<DllImport("USER32.DLL")>]
-     extern IntPtr SendMessageTimeout(HWND hWnd, int msg, IntPtr wParam, IntPtr lParam, int flags, int timeout, IntPtr& pdwResult)
-     [<DllImport("USER32.DLL")>]
-     extern bool DestroyIcon(IntPtr hIcon)
-     [<DllImport("USER32.DLL")>]
-     extern IntPtr GetClassLongPtr(HWND hWnd, int index)
-     [<DllImport("USER32.DLL")>]
-     extern IntPtr MonitorFromWindow(HWND hWnd, int flags)
-     [<DllImport("USER32.DLL")>]
-     extern bool GetMonitorInfo(IntPtr hMonitor, MONITORINFO& lpmi)
-
-module private Psapi =
-    [<DllImport("psapi.dll", CharSet=CharSet.Unicode, SetLastError=true)>]
-    extern bool GetProcessImageFileNameW(IntPtr hProcess, StringBuilder lpImageFileName, uint32 size)
-
-    let get_process_image_file_name process_handle =
-        let builder = StringBuilder(4096)
-        GetProcessImageFileNameW(process_handle, builder, (uint32 builder.Capacity)) |> ignore
-        builder.ToString()
-
-module private Shcore =
-    type MONITOR_DPI_TYPE = MDT_EFFECTIVE_DPI = 0
-
-    [<DllImport("shcore.dll")>]
-    extern uint32 GetDpiForMonitor(IntPtr hMonitor, MONITOR_DPI_TYPE dpiType, uint32& dpiX, uint32& dpiY)
-
-
-module VirtualDesktop =
-    module internal CLSIDs =
-        let ImmersiveShell = new Guid("c2f03a33-21f5-47fa-b4bb-156362a2f239")
-        let VirtualDesktopManager = new Guid("aa509086-5ca9-4c25-8f95-589d3c07b48a")
-        let VirtualDesktopManagerInternal = new Guid("c5e0cdca-7b6e-41b2-9fc4-d93975cc467b")
-
-       [<ComImport;
-      InterfaceType(ComInterfaceType.InterfaceIsIUnknown);
-      Guid("6d5140c1-7436-11ce-8034-00aa006009fa");>]
-    type internal IServiceProvider10 =
-        abstract QueryService: service:byref<Guid> * rrid:byref<Guid> ->  [<MarshalAs(UnmanagedType.IUnknown)>] obj
-
-      [<ComImport;
-      InterfaceType(ComInterfaceType.InterfaceIsIUnknown);
-      Guid("92ca9dcd-5622-4bba-a805-5e9f541bd8c9")>]
-    type internal IObjectArray =
-        abstract GetCount: unit -> uint32
-        abstract GetAt: index:int * rrid:byref<Guid> *  [<MarshalAs(UnmanagedType.IUnknown)>] out:outref<obj> -> unit
-
-      [<ComImport;
-      InterfaceType(ComInterfaceType.InterfaceIsIUnknown);
-      Guid("ff72ffdd-be7e-43fc-9c03-ad81681e88e4")>]
-    type internal IVirtualDesktop =
-        abstract IsViewVisible: obj -> bool
-        abstract GetId: unit -> Guid
-
-      [<ComImport;
-      InterfaceType(ComInterfaceType.InterfaceIsIUnknown);
-      Guid("a5cd92ff-29be-454c-8d04-d82879fb3f1b")>]
-    type internal IVirtualDesktopManager =
-        abstract IsWindowOnCurrentVirtualDesktop: User32.HWND -> bool
-        [<PreserveSig>]
-        abstract GetWindowDesktopId: User32.HWND * outref<Guid> -> int
-
-      [<ComImport;
-      InterfaceType(ComInterfaceType.InterfaceIsIUnknown);
-      Guid("f31574d6-b682-4cdc-bd56-1827860abec6")>]
-    // Unfortunately the "Internal" in its name is no joke, it's not documented,
-    // but see for example https://github.com/MScholtes/PSVirtualDesktop
-    // and https://github.com/nathannelson97/VirtualDesktopGridSwitcher
-    type internal IVirtualDesktopManagerInternal =
-       abstract GetCount: unit -> int
-       abstract MoveViewToDesktop: IntPtr * IVirtualDesktop -> unit
-       abstract CanViewMoveDesktops: IntPtr -> unit
-       abstract GetCurrentDesktop: unit -> IVirtualDesktop
-       abstract GetDesktops: unit -> IObjectArray
-       abstract GetAdjacentDesktop: IVirtualDesktop -> int -> IVirtualDesktop
-       abstract SwitchDesktop: desktop:IVirtualDesktop -> unit
-       abstract CreateDesktopW: unit -> IVirtualDesktop
-       abstract RemoveDesktop: IVirtualDesktop -> IVirtualDesktop -> unit
-       abstract FindDesktop: inref<Guid> -> IVirtualDesktop
-
-    type Desktop internal (manager: IVirtualDesktopManagerInternal, desktop: IVirtualDesktop, n) =
-        member this.N = n
-        member this.Id = desktop.GetId()
-        member this.SwitchTo() =
-            manager.SwitchDesktop(desktop)
-
-    type Manager internal (manager: IVirtualDesktopManager, managerInternal: IVirtualDesktopManagerInternal) as self =
-        let desktopCache = LRUCache.OfSize<Guid, Desktop>(9)
-
-        do
-            // XXX when to refresh?
-            for desktop in self.GetDesktops() do
-                desktopCache.Add(desktop.Id, desktop)
-
-        member this.GetDesktop(window: User32.HWND) =
-            match manager.GetWindowDesktopId(window) with
-            | (0, desktopId) when desktopId = Guid.Empty -> None
-            | (0, desktopId) -> desktopCache.Get(desktopId)
-            | (_, _) -> None
-
-        member this.GetDesktops(): List<Desktop> =
-            let desktops = new List<Desktop>();
-            let rawDesktops = managerInternal.GetDesktops()
-            for i = 0 to managerInternal.GetCount() - 1 do
-                let mutable rrid = typeof<IVirtualDesktop>.GUID
-                let nativeDesktop = rawDesktops.GetAt(i, &rrid)
-                let desktop = new Desktop(managerInternal, nativeDesktop :?> IVirtualDesktop, i + 1) 
-                desktops.Add(desktop)
-            desktops
-
-    let newManager() =
-        let shell = Activator.CreateInstance(Type.GetTypeFromCLSID(CLSIDs.ImmersiveShell)) :?> IServiceProvider10
-        let manager =
-            Activator.CreateInstance(Type.GetTypeFromCLSID(CLSIDs.VirtualDesktopManager))
-            :?> IVirtualDesktopManager
-        let mutable serviceGuid = CLSIDs.VirtualDesktopManagerInternal
-        let mutable riid = typeof<IVirtualDesktopManagerInternal>.GUID
-        let managerInternal = shell.QueryService(&serviceGuid, &riid) :?> IVirtualDesktopManagerInternal
-        new Manager(manager, managerInternal)
-
-
-module internal WinUtils =
-    let window_title hwnd =
-        let stringBuilder = new StringBuilder(1024)
-        match User32.GetWindowText(hwnd, stringBuilder, stringBuilder.Capacity) with
-        | len when len > 0 -> stringBuilder.ToString() |> Some
-        | _ -> None
-
-    let window_process hwnd =
-        let mutable pid = 0
-        User32.GetWindowThreadProcessId(hwnd, &pid) |> ignore
-        match Kernel32.OpenProcess(User32.PROCESS_QUERY_LIMITED_INFORMATION, false, pid) with
-        | handle when handle <> IntPtr.Zero ->
-            try
-                Some(Psapi.get_process_image_file_name(handle))
-            finally
-                Kernel32.CloseHandle(handle) |> ignore
-        | _ -> None
-
-    let window_icon hwnd icon_loader =
-        let send_icon_msg (icon : int) =
-            let mutable result = IntPtr.Zero
-            match User32.SendMessageTimeout(hwnd, User32.WM_GETICON, IntPtr(icon), IntPtr.Zero,
-                                            0, 50, &result) with
-            | hr when hr <> IntPtr.Zero && result <> IntPtr.Zero -> Some(result)
-            | _ -> None
-        let icon_from_class_ptr () =
-            match User32.GetClassLongPtr(hwnd, User32.GCL_HICON) with
-            | handle when handle <> IntPtr.Zero -> Some handle
-            | _ -> None
-        let load_icon handle =
-            try
-                icon_loader handle
-            finally
-                User32.DestroyIcon(handle) |> ignore
-        send_icon_msg User32.ICON_BIG
-        |> Option.orElseWith (fun _ -> send_icon_msg User32.ICON_SMALL2)
-        |> Option.orElseWith icon_from_class_ptr
-        |> Option.map load_icon
-
-    let windows() =
-        let shellWindow = User32.GetShellWindow()
-        let windows = new List<User32.HWND * string>();
-        let handle_win hwnd _ =
-            if hwnd <> shellWindow && User32.IsWindowVisible(hwnd) then
-                match window_title hwnd with
-                | Some(title) -> windows.Add((hwnd, title))
-                | None -> ()
-            true
-        User32.EnumWindows(new User32.EnumWindowsProc(handle_win), 0) |> ignore
-        windows
-
-type ShellEvent =
-    | Activated of User32.HWND
-    | TitleChanged of User32.HWND
-    | Unknown of int * User32.HWND
 
 // Opaque type to hide the underlying IntPtr
 [<NoComparison; StructuralEquality>]
 type Id = private Id of IntPtr
 
-type Rect =
-    { Left: double
-      Right: double
-      Top: double
-      Bottom: double }
-
-type Window<'I> when 'I: null internal (process_name: string option,
+// Used for information purposes (i.e. quick window jump), but not for internal bookkeeping
+type Window<'I when 'I: null> internal (process_name: string option,
                                         desktop: VirtualDesktop.Desktop,
-                                        hwnd: User32.HWND,
+                                        hWnd: User32.HWND,
                                         title: String,
                                         icon: 'I option) =
    member this.Desktop = desktop
    member this.Process = Option.toObj process_name
    member this.Title = title
    member this.Icon = Option.toObj icon
-   member this.Id = Id hwnd
+   member this.Id = Id hWnd
    member this.ToForeground() =
        // XXX maximize if minimized?
-       User32.SetForegroundWindow(hwnd)
+       User32.SetForegroundWindow(hWnd)
        |> ignore
 
+type internal WorldEvent =
+    | DesktopChanged
+    | TitleChanged of User32.HWND
+    | WindowCreated of User32.HWND
+    | WindowDestroyed of User32.HWND
+    | WindowChangedLocation of User32.HWND
+    | WindowCloaked of User32.HWND
+    | WindowFocused of User32.HWND
+    | WindowShown of User32.HWND
+
 // Parametrized on icon type, as this library doesn't have a dependency to WPF
-type WindowManager<'I> when 'I: null internal (desktopManager: VirtualDesktop.Manager,
-                                               iconLoader: (User32.HWND -> 'I)) =
-    let process_name_cache = LRUCache<User32.HWND, string option>(512)
+type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Manager,
+                                               iconLoader: User32.HWND -> 'I) =
+    let processNameCache = LRUCache<User32.HWND, string option>(512)
     let window_icon_cache = LRUCache<User32.HWND, 'I option>(512)
+    let mutable stackSet =
+        StackSet.fromDesktops<User32.HWND, Layout> (desktopManager, List.ofSeq (DisplayUtils.getDisplays()), Full())
+
+    let interesting hWnd =
+        let style: User32.WindowStyle = enum (int (User32.GetWindowLongPtr(hWnd, User32.GWL_STYLE).ToInt64()))
+        let exStyle: User32.ExtendedWindowStyle = enum (int (User32.GetWindowLongPtr(hWnd, User32.GWL_EXSTYLE).ToInt64()))
+
+        style.HasFlag(User32.WindowStyle.MaximizeBox)
+        && not (style.HasFlag(User32.WindowStyle.Child))
+        && not (exStyle.HasFlag(User32.ExtendedWindowStyle.ToolWindow))
+        && User32.IsWindowVisible(hWnd)
+
+    let setWindowPosIfRequired hWnd (area: Rectangle) =
+        let actualRect = WinUtils.windowFrameRect hWnd
+
+        let title = WinUtils.windowTitle hWnd
+        if area.Top <> actualRect.top || area.Bottom <> actualRect.bottom
+           || area.Left <> actualRect.left || area.Right <> actualRect.right
+           then
+            // Set position, but also count in DWM frame size
+            let mutable windowRect: User32.RECT = { left = 0; right = 0; top = 0; bottom = 0 }
+            User32.GetWindowRect(hWnd, &windowRect) |> ignore
+
+            let leftBorderWidth = actualRect.left - windowRect.left
+            let rightBorderWidth = windowRect.right - actualRect.right
+            let topBorderWidth = actualRect.top - windowRect.top
+            let bottomBorderWidth = windowRect.bottom - actualRect.bottom
+            let flags = uint32 (User32.SwpFlags.NoActivate ||| User32.SwpFlags.NoZOrder)
+            User32.SetWindowPos(hWnd, IntPtr.Zero,
+                                area.Left - leftBorderWidth,
+                                area.Top - topBorderWidth,
+                                area.Width + leftBorderWidth + rightBorderWidth,
+                                area.Height + topBorderWidth + bottomBorderWidth,
+                                flags)
+            |> ignore
+
+    let refresh() =
+        // For each display, layout the currently visible workspace
+        for display in stackSet.Displays() do
+            display.workspace.stack
+            |> Option.iter (fun stack ->
+                // XXX how to handle here that the display area can't be determined?
+                let displayArea = DisplayUtils.rectangleFromMonitorHandle display.monitor
+                for (w, area) in display.workspace.layout.DoLayout(stack, displayArea.Value) do
+                    setWindowPosIfRequired w area)
+        stackSet.Peek() |> Option.iter (fun hWnd -> User32.SetForegroundWindow(hWnd) |> ignore)
+
+    let manage hWnd =
+        stackSet <- stackSet.InsertUp(hWnd)
+        refresh()
+
+    // Initialization
+    do
+        for hWnd in WinUtils.windows interesting do
+            match desktopManager.GetDesktop(hWnd) with
+            | Some desktop ->
+                stackSet <- stackSet.View(desktop.N - 1).InsertUp(hWnd)
+            | None -> ()
+        stackSet <- stackSet.View(0)
+        refresh()
+
     let switch_to_desktop = function
     | i when i < 0 -> ()
     | i ->
@@ -262,24 +108,24 @@ type WindowManager<'I> when 'I: null internal (desktopManager: VirtualDesktop.Ma
         if i < desktops.Count then
             desktops.[i].SwitchTo()
 
-    let determine_process hwnd =
-        match process_name_cache.Get(hwnd) with
+    let determineProcess hWnd =
+        match processNameCache.Get(hWnd) with
         | Some(value) -> value
         | None ->
-            let name = WinUtils.window_process hwnd
-            process_name_cache.Add(hwnd, name)
+            let name = WinUtils.windowProcess hWnd
+            processNameCache.Add(hWnd, name)
             name
 
-    let get_icon hwnd =
-        match window_icon_cache.Get(hwnd) with
+    let getIcon hWnd =
+        match window_icon_cache.Get(hWnd) with
         | Some(value) -> value
         | None ->
-            let icon = WinUtils.window_icon hwnd iconLoader
-            window_icon_cache.Add(hwnd, icon)
+            let icon = WinUtils.windowIcon hWnd iconLoader
+            window_icon_cache.Add(hWnd, icon)
             icon
 
-    let clean_up_process_name = function
-    | Some(name : string) ->
+    let cleanUpProcessName = function
+    | Some(name: string) ->
         let parts = name.Split [| '\\' |]
         // Drop first two elements, as they are uninteresting
         let concat = String.concat "\\" (Array.sub parts 3 (parts.Length - 3))
@@ -288,28 +134,50 @@ type WindowManager<'I> when 'I: null internal (desktopManager: VirtualDesktop.Ma
         else Some(concat)
     | None -> None
 
-    let rect_from_monitor_handle handle =
-        let mutable monitor_info = Unchecked.defaultof<User32.MONITORINFO>
-        monitor_info.cbSize <- sizeof<User32.MONITORINFO>
-        match User32.GetMonitorInfo(handle, &monitor_info) with
-        | true -> Some(monitor_info.rcWork)
-        | false -> None
+    static let registerWinEventHook (manager: WindowManager<'I>) =
+        let hook = User32.WINEVENTPROC(fun _ event hWnd idObject _ _ _ ->
+            let isWindow = idObject = int User32.ObjId.Window
+            match enum event with
+            | User32.WinEvent.ObjectNamechange when isWindow ->
+                if hWnd = User32.GetDesktopWindow() then
+                    // This means the virtual desktop was switched (because that updates the desktop window's
+                    // accessibility name)
+                    manager.HandleEvent(DesktopChanged)
+                else manager.HandleEvent(TitleChanged(hWnd))
+            | User32.WinEvent.ObjectCreate when isWindow -> manager.HandleEvent(WindowCreated hWnd)
+            | User32.WinEvent.ObjectDestroy when isWindow -> manager.HandleEvent(WindowDestroyed hWnd)
+            | User32.WinEvent.ObjectLocationchange when isWindow -> manager.HandleEvent(WindowChangedLocation hWnd)
+            | User32.WinEvent.ObjectCloaked when isWindow -> manager.HandleEvent(WindowCloaked hWnd)
+            | User32.WinEvent.ObjectShow when isWindow -> manager.HandleEvent(WindowShown hWnd)
+            // XXX needs to be handled?
+            | User32.WinEvent.ObjectHide when isWindow -> printfn "[DEBUG] Window hidden: %A" (WinUtils.windowTitle hWnd)
+            | User32.WinEvent.SystemForeground -> manager.HandleEvent(WindowFocused hWnd)
+            | _ -> ())
+        // Keep hook forever alive
+        GCHandle.Alloc(hook) |> ignore
+        let flags = User32.WinEventFlags.WINEVENT_OUTOFCONTEXT ||| User32.WinEventFlags.WINEVENT_SKIPOWNPROCESS
+        if User32.SetWinEventHook(int User32.WinEvent.Min, int User32.WinEvent.Max, IntPtr.Zero, hook, 0, 0,
+                                  int flags) = IntPtr.Zero then
+            printfn "[ERROR] Could not register win event hook :( :("
 
     static member New(iconLoader: System.Func<User32.HWND, 'I>) =
-        WindowManager(VirtualDesktop.newManager(), fun h -> iconLoader.Invoke(h))
+        let manager = WindowManager(VirtualDesktop.newManager(), fun h -> iconLoader.Invoke(h))
+        registerWinEventHook manager
+        manager
 
-    static member EmptyRect = { Left = 0.0; Right = 0.0; Top = 0.0; Bottom = 0.0 }
+    static member EmptyRect = Rectangle(0, 0, 0, 0)
 
     member this.GetWindows() =
-        seq { for (hwnd, title) in WinUtils.windows() do
-                yield (desktopManager.GetDesktop(hwnd), hwnd, title)
-            }
+        WinUtils.windows User32.IsWindowVisible
+        |> seq<User32.HWND>
+        |> Seq.map (fun hWnd -> (desktopManager.GetDesktop(hWnd), hWnd, WinUtils.windowTitle hWnd))
         |> Seq.collect (function
             | (None, _, _) -> Seq.empty
-            | (Some(desktop), hwnd, title) ->
-                let process_name = determine_process(hwnd)
-                let icon = get_icon hwnd
-                Seq.singleton(Window(clean_up_process_name process_name, desktop, hwnd, title, icon))
+            | (_, _, None) -> Seq.empty
+            | (Some(desktop), hWnd, Some(title)) ->
+                let process_name = determineProcess (hWnd)
+                let icon = getIcon hWnd
+                Seq.singleton (Window(cleanUpProcessName process_name, desktop, hWnd, title, icon))
             )
 
     member this.SwitchToDesktop(i) =
@@ -320,7 +188,7 @@ type WindowManager<'I> when 'I: null internal (desktopManager: VirtualDesktop.Ma
         | hWnd when hWnd <> IntPtr.Zero ->
             match User32.MonitorFromWindow(hWnd, User32.MONITOR_DEFAULTTONULL) with
             | monitor_handle when monitor_handle <> IntPtr.Zero ->
-                match rect_from_monitor_handle monitor_handle with
+                match DisplayUtils.rectFromMonitorHandle monitor_handle with
                 | Some(rect) ->
                     // WPF uses device-independent pixels, convert
                     let mutable dpiX = 0u
@@ -329,14 +197,30 @@ type WindowManager<'I> when 'I: null internal (desktopManager: VirtualDesktop.Ma
                     |> ignore
                     let scaleX = 96.0 / double dpiX
                     let scaleY = 96.0 / double dpiY
-                    { Left = double rect.left * scaleX; Right = double rect.right * scaleX;
-                      Top = double rect.top * scaleY; Bottom = double rect.bottom * scaleY }
+                    let left = int (double rect.left * scaleX)
+                    let right = int (double rect.right * scaleX)
+                    let top = int (double rect.top * scaleY)
+                    let bottom = int (double rect.bottom * scaleY)
+                    Rectangle(left, top, right - left, bottom - top)
                 | None -> WindowManager<'I>.EmptyRect
             | _ -> WindowManager<'I>.EmptyRect
         | _ -> WindowManager<'I>.EmptyRect
 
-    member this.HandleEvent(event: ShellEvent) =
+    member internal this.HandleEvent(event: WorldEvent) =
         match event with
-        | Unknown(code, hwnd) ->
-            printfn "unknown event: %A %A" code (WinUtils.window_title hwnd)
+        | DesktopChanged ->
+            stackSet <- stackSet.View(desktopManager.GetCurrentDesktop().N - 1)
+            refresh()
+        | WindowCreated hWnd when interesting hWnd -> manage hWnd
+        | WindowDestroyed hWnd -> stackSet <- stackSet.Delete(hWnd)
+        | WindowChangedLocation hWnd when stackSet.Contains(hWnd) ->
+            match (desktopManager.GetDesktop(hWnd), desktopManager.GetCurrentDesktop()) with
+            | (Some windowDesktop, currentDesktop) when windowDesktop.N = currentDesktop.N ->
+                if User32.IsIconic(hWnd) then
+                    User32.ShowWindow(hWnd, User32.SW_RESTORE) |> ignore
+                else
+                    refresh ()
+            | _ -> ()
+        | WindowFocused hWnd -> stackSet <- stackSet.Focus(hWnd)
+        | WindowShown hWnd when interesting hWnd -> manage hWnd
         | _ -> ()

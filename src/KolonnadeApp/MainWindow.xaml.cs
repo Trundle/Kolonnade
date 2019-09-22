@@ -19,18 +19,15 @@ namespace KolonnadeApp
     {
         public ListCollectionView Selectables { get; set; }
         private string _searchText = "";
-        private readonly MessagePump _messagePump = new MessagePump();
         private readonly WindowManager<BitmapSource> _windowManager = WindowManager<BitmapSource>.New(IconLoader);
         private readonly List<Window> _windowList;
         private readonly List<Item> _viewList;
         private readonly History _history = new History(16);
         private const int WmHotkey = 0x0312;
         private const uint VkSpace = 0x20;
-        
+
         public MainWindow()
         {
-            _messagePump.ShellEvent += _windowManager.HandleEvent;
-
             _windowList = new List<Window>(_windowManager.GetWindows());
             _viewList = new List<Item>();
             Selectables = new ListCollectionView(_viewList);
@@ -192,12 +189,9 @@ namespace KolonnadeApp
         private void OnHotKey()
         {
             var monitorRect = _windowManager.GetActiveMonitor();
-            if (!monitorRect.Equals(WindowManager<BitmapSource>.EmptyRect))
-            {
-                var width = monitorRect.Right - monitorRect.Left - Width;
-                var height = monitorRect.Bottom - monitorRect.Top - Height;
-                Left = monitorRect.Left + (width / 2.0);
-                Top = monitorRect.Top + (height / 2.0);
+            if (!monitorRect.IsEmpty) {
+                Left = monitorRect.Left + (monitorRect.Width - Width) / 2.0;
+                Top = monitorRect.Top + (monitorRect.Height - Height) / 2.0;
             }
             Reset();
             Show();

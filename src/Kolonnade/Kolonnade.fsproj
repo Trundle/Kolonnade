@@ -9,6 +9,12 @@
 
   <ItemGroup>
     <Compile Include="LRUCache.fs" />
+    <Compile Include="Native.fs" />
+    <Compile Include="VirtualDesktop.fs" />
+    <Compile Include="StackSet.fs" />
+    <Compile Include="Layout.fs" />
+    <Compile Include="WinUtils.fs" />
+    <Compile Include="DisplayUtils.fs" />
     <Compile Include="Library.fs" />
   </ItemGroup>
 
