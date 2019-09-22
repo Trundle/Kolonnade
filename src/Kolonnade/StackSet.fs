@@ -41,6 +41,9 @@ type Stack<'A> =
             | x :: xs -> { focus = x; up = xs; down = [] }
             | _ -> failwith "Not possible to reach, but also not possible to let F# know :("
 
+    /// Reverses this stack: up becomes down and down becomes up
+    member this.Reverse() = { focus = this.focus; down = this.up; up = this.down }
+
     member this.ToList() = List.rev this.up @ this.focus :: this.down
 
 
@@ -110,6 +113,18 @@ type StackSet<'W, 'L when 'W: equality> =
                 switchedToWs.Modify'(fun s -> until (fun s -> s.focus = w) (fun s -> s.FocusUp()) s)
             | None -> this
 
+    member this.FocusUp() = this.Modify'(fun s -> s.FocusUp())
+
+    member this.FocusDown() = this.Modify'(fun s -> s.Reverse().FocusUp().Reverse())
+
+    member this.FocusMain() =
+        this.Modify'(function
+            | { up = [] } as stack -> stack
+            | s ->
+                match List.rev s.up with
+                | x :: xs -> { focus = x; up = []; down = xs @ s.focus :: s.down }
+                | _ -> failwith "Impossible to reach, but F# doesn't know that :(")
+
     /// Deletes the given window, if it exists.
     member this.Delete(w) =
         let removeFromWorkspace ws =
@@ -129,6 +144,14 @@ type StackSet<'W, 'L when 'W: equality> =
             this.Modify (Some ({ focus = w; up = []; down = [] }),
                          fun { focus = f; up = u; down = d; } ->
                             Some ({ focus = w; up = u; down = f :: d }))
+
+    /// Raises the currently focused window to the main pane.
+    /// The other windows are kept in order and shifted down on the stack.
+    member this.RaiseToMain() =
+        this.Modify'(function
+            | { up = [] } as stack -> stack
+            | { focus = focus; up = up; down = down } ->
+                { focus = focus; up = []; down = List.rev up @ down } )
 
     /// Sets focus to the workspace with the given tag. Returns the stackset unmodified
     /// if the given tag doesn't exist.

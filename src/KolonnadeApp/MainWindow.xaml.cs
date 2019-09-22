@@ -24,7 +24,17 @@ namespace KolonnadeApp
         private readonly List<Item> _viewList;
         private readonly History _history = new History(16);
         private const int WmHotkey = 0x0312;
+        private const uint VkReturn = 0x0d;
         private const uint VkSpace = 0x20;
+
+        enum HotKeys
+        {
+            Jumper = 1,
+            RaiseToMain,
+            FocusUp,
+            FocusDown,
+            FocusMain,
+        }
 
         public MainWindow()
         {
@@ -36,7 +46,7 @@ namespace KolonnadeApp
             InitializeComponent();
             SearchInput.Focus();
 
-            RegisterHotKey();
+            RegisterHotKeys();
         }
 
         private bool SearchFilter(Window w)
@@ -162,17 +172,23 @@ namespace KolonnadeApp
             }
         }
 
-        private void RegisterHotKey()
+        private void RegisterHotKeys()
         {
             var interopHelper = new WindowInteropHelper(this);
-            var hwnd = interopHelper.EnsureHandle();
-            if (!RegisterHotKey(hwnd, 1, KeyModifiers.Shift | KeyModifiers.NoRepeat, VkSpace))
+            var hWnd = interopHelper.EnsureHandle();
+            if (!RegisterHotKey(hWnd, (int) HotKeys.Jumper, KeyModifiers.Shift | KeyModifiers.NoRepeat, VkSpace))
             {
                 // XXX Handle that somehow?
                 Console.WriteLine("Well that wasn't successful :( :( :('");
             }
 
-            var hwndSource = HwndSource.FromHwnd(hwnd);
+            var mod = KeyModifiers.Alt | KeyModifiers.NoRepeat;
+            RegisterHotKey(hWnd, (int) HotKeys.RaiseToMain, mod, VkReturn);
+            RegisterHotKey(hWnd, (int) HotKeys.FocusDown, mod, 'J');
+            RegisterHotKey(hWnd, (int) HotKeys.FocusUp, mod, 'K');
+            RegisterHotKey(hWnd, (int) HotKeys.FocusMain, mod, 'M');
+
+            var hwndSource = HwndSource.FromHwnd(hWnd);
             hwndSource.AddHook(OnMessage);
         }
 
@@ -180,7 +196,24 @@ namespace KolonnadeApp
         {
             if (msg == WmHotkey)
             {
-                OnHotKey();
+                switch ((HotKeys) wparam.ToInt32())
+                {
+                    case HotKeys.Jumper:
+                        OnHotKey();
+                        break;
+                    case HotKeys.RaiseToMain:
+                        _windowManager.RaiseToMain();
+                        break;
+                    case HotKeys.FocusUp:
+                        _windowManager.FocusUp();
+                        break;
+                    case HotKeys.FocusDown:
+                        _windowManager.FocusDown();
+                        break;
+                    case HotKeys.FocusMain:
+                        _windowManager.FocusMain();
+                        break;
+                }
             }
 
             return IntPtr.Zero;
@@ -189,10 +222,12 @@ namespace KolonnadeApp
         private void OnHotKey()
         {
             var monitorRect = _windowManager.GetActiveMonitor();
-            if (!monitorRect.IsEmpty) {
+            if (!monitorRect.IsEmpty)
+            {
                 Left = monitorRect.Left + (monitorRect.Width - Width) / 2.0;
                 Top = monitorRect.Top + (monitorRect.Height - Height) / 2.0;
             }
+
             Reset();
             Show();
             Opacity = 1;
@@ -217,7 +252,10 @@ namespace KolonnadeApp
         [Flags]
         private enum KeyModifiers : uint
         {
+            Alt = 1u,
+            Control = 2u,
             Shift = 4u,
+            Win = 8u,
             NoRepeat = 0x4000u,
         }
 
@@ -309,7 +347,7 @@ namespace KolonnadeApp
             }
         }
 
-        class HistoryComparer: IComparer<Window>
+        class HistoryComparer : IComparer<Window>
         {
             private readonly Func<LinkedList<Id>> _history;
 

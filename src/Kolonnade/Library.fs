@@ -34,6 +34,8 @@ type internal WorldEvent =
     | WindowCloaked of User32.HWND
     | WindowFocused of User32.HWND
     | WindowShown of User32.HWND
+    | WindowMoveSizeStart of User32.HWND
+    | WindowMoveSizeEnd of User32.HWND
 
 // Parametrized on icon type, as this library doesn't have a dependency to WPF
 type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Manager,
@@ -42,6 +44,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
     let window_icon_cache = LRUCache<User32.HWND, 'I option>(512)
     let mutable stackSet =
         StackSet.fromDesktops<User32.HWND, Layout> (desktopManager, List.ofSeq (DisplayUtils.getDisplays()), Full())
+    let mutable moving: User32.HWND option = None
 
     let interesting hWnd =
         let style: User32.WindowStyle = enum (int (User32.GetWindowLongPtr(hWnd, User32.GWL_STYLE).ToInt64()))
@@ -99,6 +102,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
                 stackSet <- stackSet.View(desktop.N - 1).InsertUp(hWnd)
             | None -> ()
         stackSet <- stackSet.View(0)
+        stackSet <- { stackSet with current = { stackSet.current with workspace = { stackSet.current.workspace with layout = Tall(0.7) } } }
         refresh()
 
     let switch_to_desktop = function
@@ -134,6 +138,26 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
         else Some(concat)
     | None -> None
 
+    /// Returns whether the given window is on the current (virtual) desktop.
+    let onCurrentDesktop hWnd =
+        match (desktopManager.GetDesktop(hWnd), desktopManager.GetCurrentDesktop()) with
+        | (Some windowDesktop, currentDesktop) when windowDesktop.N = currentDesktop.N -> true
+        | _ -> false
+
+    let handleMainWindowSizeChange hWnd =
+        match DisplayUtils.rectFromMonitorHandle stackSet.current.monitor with
+        | Some rect ->
+            // XXX this should be handled by current layout itself
+            let windowRect = WinUtils.windowFrameRect hWnd
+            let windowWidth = windowRect.right - windowRect.left
+            let displayWidth = rect.right - rect.left
+            let newFraction = float windowWidth / float displayWidth
+            if stackSet.current.workspace.layout.GetType() = typeof<Tall> then
+                stackSet <-
+                    { stackSet with current = { stackSet.current with workspace = { stackSet.current.workspace with layout = Tall(newFraction) } } }
+                refresh ()
+        | None -> ()
+
     static let registerWinEventHook (manager: WindowManager<'I>) =
         let hook = User32.WINEVENTPROC(fun _ event hWnd idObject _ _ _ ->
             let isWindow = idObject = int User32.ObjId.Window
@@ -144,6 +168,8 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
                     // accessibility name)
                     manager.HandleEvent(DesktopChanged)
                 else manager.HandleEvent(TitleChanged(hWnd))
+            | User32.WinEvent.SystemMoveSizeStart -> manager.HandleEvent(WindowMoveSizeStart hWnd)
+            | User32.WinEvent.SystemMoveSizeEnd -> manager.HandleEvent(WindowMoveSizeEnd hWnd)
             | User32.WinEvent.ObjectCreate when isWindow -> manager.HandleEvent(WindowCreated hWnd)
             | User32.WinEvent.ObjectDestroy when isWindow -> manager.HandleEvent(WindowDestroyed hWnd)
             | User32.WinEvent.ObjectLocationchange when isWindow -> manager.HandleEvent(WindowChangedLocation hWnd)
@@ -206,21 +232,48 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             | _ -> WindowManager<'I>.EmptyRect
         | _ -> WindowManager<'I>.EmptyRect
 
+    /// Raises the currently focused window to the main pane.
+    /// The other windows are kept in order and shifted down on the stack.
+    member this.RaiseToMain() =
+        stackSet <- stackSet.RaiseToMain()
+        refresh ()
+
+    member this.FocusUp() =
+        stackSet <- stackSet.FocusUp()
+        refresh ()
+
+    member this.FocusDown() =
+        stackSet <- stackSet.FocusDown()
+        refresh ()
+
+    member this.FocusMain() =
+        stackSet <- stackSet.FocusMain()
+        refresh ()
+
     member internal this.HandleEvent(event: WorldEvent) =
         match event with
         | DesktopChanged ->
             stackSet <- stackSet.View(desktopManager.GetCurrentDesktop().N - 1)
             refresh()
         | WindowCreated hWnd when interesting hWnd -> manage hWnd
-        | WindowDestroyed hWnd -> stackSet <- stackSet.Delete(hWnd)
-        | WindowChangedLocation hWnd when stackSet.Contains(hWnd) ->
-            match (desktopManager.GetDesktop(hWnd), desktopManager.GetCurrentDesktop()) with
-            | (Some windowDesktop, currentDesktop) when windowDesktop.N = currentDesktop.N ->
+        | WindowDestroyed hWnd ->
+            stackSet <- stackSet.Delete(hWnd)
+            if onCurrentDesktop hWnd then
+                refresh ()
+        | WindowChangedLocation hWnd when stackSet.Contains(hWnd) && moving <> Some(hWnd) ->
+            if onCurrentDesktop hWnd then
                 if User32.IsIconic(hWnd) then
                     User32.ShowWindow(hWnd, User32.SW_RESTORE) |> ignore
                 else
                     refresh ()
-            | _ -> ()
         | WindowFocused hWnd -> stackSet <- stackSet.Focus(hWnd)
         | WindowShown hWnd when interesting hWnd -> manage hWnd
+        | WindowMoveSizeStart hWnd -> moving <- Some hWnd
+        | WindowMoveSizeEnd hWnd ->
+            match stackSet.current.workspace.stack with
+            | Some { focus = f; up = [] } when f = hWnd ->
+                // Main window was changed, let layout handle that
+                handleMainWindowSizeChange hWnd
+            | _ -> refresh ()
+            moving <- None
         | _ -> ()
