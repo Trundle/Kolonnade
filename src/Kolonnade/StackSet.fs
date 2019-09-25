@@ -48,14 +48,15 @@ type Stack<'A> =
 
 
 type Workspace<'W, 'L> =
-    { tag: int
+    { tag: int // Note: starts at 1
       stack: Stack<'W> option
       layout: 'L
       desktop: VirtualDesktop.Desktop }
 
 /// A visible workspace
 type Display<'W, 'L> =
-    { workspace: Workspace<'W, 'L>
+    { n: int // Note: starts at 1
+      workspace: Workspace<'W, 'L>
       monitor: HMONITOR }
 
 /// The actual window manager state: a cursor into a non-empty list of workspaces
@@ -65,8 +66,7 @@ type StackSet<'W, 'L when 'W: equality> =
       hidden: Workspace<'W, 'L> list }
 
     /// Returns the tag of the currently focused workspace.
-    member this.CurrentTag() =
-        this.current.workspace.tag
+    member this.CurrentTag() = this.current.workspace.tag
 
     /// Returns a list of all displays.
     member this.Displays() = this.current :: this.visible
@@ -162,8 +162,8 @@ type StackSet<'W, 'L when 'W: equality> =
             match List.tryFind (fun d -> d.workspace.tag = t) this.visible with
             | Some x ->
                 // Workspace is visible, just raise it
-                let new_visible = this.current :: List.filter (fun d -> d.monitor <> this.current.monitor) this.visible
-                { this with current = x; visible = new_visible }
+                let newVisible = this.current :: List.filter (fun d -> d.monitor <> x.monitor) this.visible
+                { this with current = x; visible = newVisible }
             | None ->
                 // Workspace is currently hidden, raise it on the active display
                 match List.tryFind (fun w -> w.tag = t) this.hidden with
@@ -178,6 +178,11 @@ type StackSet<'W, 'L when 'W: equality> =
     member this.OnWorkspace(t, f: StackSet<'W, 'L> -> StackSet<'W, 'L>) =
         this.View(t) |> f |> fun s -> s.View(this.CurrentTag())
 
+    /// Returns whether the workspace with the given tag is currently visible on some display.
+    member this.IsOnSomeDisplay(tag) =
+        List.tryFind (fun d -> d.workspace.tag = tag) (this.Displays())
+        |> Option.isSome
+
 module internal StackSet =
     /// Constructs a new StackSet from Window's current state
     let fromDesktops<'W, 'L when 'W: equality> (desktopManager: VirtualDesktop.Manager,
@@ -187,10 +192,10 @@ module internal StackSet =
         desktopManager.GetDesktops().[0].SwitchTo()
 
         let workspaces = seq (desktopManager.GetDesktops())
-                         |> Seq.mapi (fun i d -> { tag = i; stack = None; desktop = d; layout = defaultLayout })
+                         |> Seq.mapi (fun i d -> { tag = i + 1; stack = None; desktop = d; layout = defaultLayout })
                          |> Seq.toList
         let (seen, unseen) = List.splitAt (List.length displayRects) workspaces
-        let displays = [ for ((handle, _), workspace) in List.zip displayRects seen do
-                            yield { workspace = workspace; monitor = handle }
-                       ]
+        let displays = List.mapi (fun i ((handle, _), workspace) ->
+                            { n = i + 1; workspace = workspace; monitor = handle; })
+                            (List.zip displayRects seen)
         { current = displays.Head; visible = displays.Tail; hidden = unseen }

@@ -12,6 +12,7 @@ module VirtualDesktop =
         let ImmersiveShell = new Guid("c2f03a33-21f5-47fa-b4bb-156362a2f239")
         let VirtualDesktopManager = new Guid("aa509086-5ca9-4c25-8f95-589d3c07b48a")
         let VirtualDesktopManagerInternal = new Guid("c5e0cdca-7b6e-41b2-9fc4-d93975cc467b")
+        let VirtualDesktopNotificationService = new Guid("a501fdec-4a09-464c-ae4e-1b9c21b84918")
 
     [<ComImport;
       InterfaceType(ComInterfaceType.InterfaceIsIUnknown);
@@ -25,6 +26,24 @@ module VirtualDesktop =
     type internal IObjectArray =
         abstract GetCount: unit -> uint32
         abstract GetAt: index:int * rrid:byref<Guid> *  [<MarshalAs(UnmanagedType.IUnknown)>] out:outref<obj> -> unit
+
+    [<ComImport;
+      InterfaceType(ComInterfaceType.InterfaceIsIInspectable);
+      Guid("372e1d3b-38d3-42e4-a15b-8ab2b178f513")>]
+    type internal IApplicationView =
+        abstract SetFocus: unit -> int
+        abstract SwitchTo: unit -> int
+        // Other methods omitted
+
+    [<ComImport;
+      InterfaceType(ComInterfaceType.InterfaceIsIUnknown);
+      Guid("1841c6d7-4f9d-42c0-af41-8747538f10e5")>]
+    type internal IApplicationViewCollection =
+        abstract GetViews: byref<IObjectArray> -> int
+        abstract GetViewsByZOrder: byref<IObjectArray> -> int
+        abstract GetViewsByAppUserModelId: string * byref<IObjectArray> -> int
+        abstract GetViewForHwnd: User32.HWND * outref<IApplicationView> -> int
+        // Other methods omitted
 
     [<ComImport;
       InterfaceType(ComInterfaceType.InterfaceIsIUnknown);
@@ -49,8 +68,8 @@ module VirtualDesktop =
     // and https://github.com/nathannelson97/VirtualDesktopGridSwitcher
     type internal IVirtualDesktopManagerInternal =
        abstract GetCount: unit -> int
-       abstract MoveViewToDesktop: IntPtr * IVirtualDesktop -> unit
-       abstract CanViewMoveDesktops: IntPtr -> unit
+       abstract MoveViewToDesktop: IApplicationView * IVirtualDesktop -> unit
+       abstract CanViewMoveDesktops: IApplicationView -> unit
        abstract GetCurrentDesktop: unit -> IVirtualDesktop
        abstract GetDesktops: unit -> IObjectArray
        abstract GetAdjacentDesktop: IVirtualDesktop -> int -> IVirtualDesktop
@@ -59,13 +78,39 @@ module VirtualDesktop =
        abstract RemoveDesktop: IVirtualDesktop -> IVirtualDesktop -> unit
        abstract FindDesktop: inref<Guid> -> IVirtualDesktop
 
-    type Desktop internal (manager: IVirtualDesktopManagerInternal, desktop: IVirtualDesktop, n) =
+    [<ComImport;
+      InterfaceType(ComInterfaceType.InterfaceIsIUnknown);
+      Guid("c179334c-4295-40d3-bea1-c654d965605a")>]
+    type internal IVirtualDesktopNotification =
+        abstract VirtualDesktopCreated: IVirtualDesktop -> unit
+        abstract VirtualDesktopDestroyBegin: IVirtualDesktop -> IVirtualDesktop -> unit
+        abstract VirtualDesktopDestroyFailed: IVirtualDesktop -> IVirtualDesktop -> unit
+        abstract VirtualDesktopDestroyed: IVirtualDesktop -> IVirtualDesktop -> unit
+        abstract ViewVirtualDesktopChanged: IApplicationView -> unit
+        abstract CurrentVirtualDesktopChanged: IVirtualDesktop -> IVirtualDesktop -> unit
+
+    [<ComImport;
+      InterfaceType(ComInterfaceType.InterfaceIsIUnknown);
+      Guid("0cd45e71-d927-4f15-8b0a-8fef525337bf")>]
+    type internal IVirtualDesktopNotificationService =
+        abstract Register: byref<IVirtualDesktopNotification> -> int
+        abstract Unregister: int -> unit
+
+    type Desktop internal (manager: IVirtualDesktopManagerInternal,
+                           desktop: IVirtualDesktop,
+                           applicationViewCollection: IApplicationViewCollection,
+                           n) =
         member this.N = n
         member this.Id = desktop.GetId()
-        member this.SwitchTo() =
-            manager.SwitchDesktop(desktop)
+        member this.MoveWindowTo(hWnd: User32.HWND) =
+            match applicationViewCollection.GetViewForHwnd(hWnd) with
+            | (0, view) -> manager.MoveViewToDesktop(view, desktop)
+            | _ -> ()
+        member this.SwitchTo() = manager.SwitchDesktop(desktop)
 
-    type Manager internal (manager: IVirtualDesktopManager, managerInternal: IVirtualDesktopManagerInternal) as self =
+    type Manager internal (manager: IVirtualDesktopManager,
+                           managerInternal: IVirtualDesktopManagerInternal,
+                           applicationViewCollection: IApplicationViewCollection) as self =
         let desktopCache = LRUCache.OfSize<Guid, Desktop>(9)
 
         do
@@ -90,7 +135,10 @@ module VirtualDesktop =
             for i = 0 to managerInternal.GetCount() - 1 do
                 let mutable rrid = typeof<IVirtualDesktop>.GUID
                 let nativeDesktop = rawDesktops.GetAt(i, &rrid)
-                let desktop = new Desktop(managerInternal, nativeDesktop :?> IVirtualDesktop, i + 1)
+                let desktop = new Desktop(managerInternal,
+                                          nativeDesktop :?> IVirtualDesktop,
+                                          applicationViewCollection,
+                                          i + 1)
                 desktops.Add(desktop)
             desktops
 
@@ -99,7 +147,18 @@ module VirtualDesktop =
         let manager =
             Activator.CreateInstance(Type.GetTypeFromCLSID(CLSIDs.VirtualDesktopManager))
             :?> IVirtualDesktopManager
+
         let mutable serviceGuid = CLSIDs.VirtualDesktopManagerInternal
         let mutable riid = typeof<IVirtualDesktopManagerInternal>.GUID
         let managerInternal = shell.QueryService(&serviceGuid, &riid) :?> IVirtualDesktopManagerInternal
-        new Manager(manager, managerInternal)
+
+        serviceGuid <- typeof<IApplicationViewCollection>.GUID
+        riid <- typeof<IApplicationViewCollection>.GUID
+        let applicationViewCollection = shell.QueryService(&serviceGuid, &riid) :?> IApplicationViewCollection
+
+        serviceGuid <- CLSIDs.VirtualDesktopNotificationService
+        riid <- typeof<IVirtualDesktopNotificationService>.GUID
+        // XXX
+        let notificationService = shell.QueryService(&serviceGuid, &riid) :?> IVirtualDesktopNotificationService
+
+        new Manager(manager, managerInternal, applicationViewCollection)

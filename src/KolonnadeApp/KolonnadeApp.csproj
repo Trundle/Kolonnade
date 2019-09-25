@@ -4,9 +4,13 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>netcoreapp3.0</TargetFramework>
     <UseWPF>true</UseWPF>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
     <Configurations>Release;Debug</Configurations>
     <Platforms>x64</Platforms>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <AppManifest>app.manifest</AppManifest>
+    <Win32Manifest>app.manifest</Win32Manifest>
   </PropertyGroup>
 
   <ItemGroup>

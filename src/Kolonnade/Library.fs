@@ -58,7 +58,6 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
     let setWindowPosIfRequired hWnd (area: Rectangle) =
         let actualRect = WinUtils.windowFrameRect hWnd
 
-        let title = WinUtils.windowTitle hWnd
         if area.Top <> actualRect.top || area.Bottom <> actualRect.bottom
            || area.Left <> actualRect.left || area.Right <> actualRect.right
            then
@@ -71,15 +70,31 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             let topBorderWidth = actualRect.top - windowRect.top
             let bottomBorderWidth = windowRect.bottom - actualRect.bottom
             let flags = uint32 (User32.SwpFlags.NoActivate ||| User32.SwpFlags.NoZOrder)
-            User32.SetWindowPos(hWnd, IntPtr.Zero,
-                                area.Left - leftBorderWidth,
-                                area.Top - topBorderWidth,
-                                area.Width + leftBorderWidth + rightBorderWidth,
-                                area.Height + topBorderWidth + bottomBorderWidth,
-                                flags)
+            User32.SetWindowPos (hWnd, IntPtr.Zero,
+                                 area.Left - leftBorderWidth,
+                                 area.Top - topBorderWidth,
+                                 area.Width + leftBorderWidth + rightBorderWidth,
+                                 area.Height + topBorderWidth + bottomBorderWidth,
+                                 flags)
             |> ignore
 
+    let moveToDesktopIfRequired (targetDesktop: VirtualDesktop.Desktop) win =
+        match desktopManager.GetDesktop(win) with
+        | Some(currentDesktop) when currentDesktop.N <> targetDesktop.N -> targetDesktop.MoveWindowTo(win)
+        | _ -> ()
+
+    /// Moves all windows back to the desktop where they originally belonged to, but were moved
+    /// due to Kolonnade's multi-workspace support.
+    /// This should be called before the stackSet has been updated after a desktop switch.
+    let moveWindowsBackToBelongingDesktop (newDesktop: VirtualDesktop.Desktop) =
+        for display in stackSet.Displays() do
+            if display.workspace.tag <> newDesktop.N then
+                let targetDesktop = desktopManager.GetDesktops().[display.workspace.tag - 1]
+                display.workspace.stack
+                |> Option.iter (fun stack -> List.iter (fun w -> moveToDesktopIfRequired targetDesktop w) (stack.ToList()))
+
     let refresh() =
+        let currentVirtualDesktop = desktopManager.GetCurrentDesktop()
         // For each display, layout the currently visible workspace
         for display in stackSet.Displays() do
             display.workspace.stack
@@ -87,6 +102,11 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
                 // XXX how to handle here that the display area can't be determined?
                 let displayArea = DisplayUtils.rectangleFromMonitorHandle display.monitor
                 for (w, area) in display.workspace.layout.DoLayout(stack, displayArea.Value) do
+                    printfn "%A %A %A" w area (WinUtils.windowTitle w)
+                    // This is where integrating seamless into Windows fails a bit: we want to display
+                    // multiple workspaces at once, one at each display, but a virtual desktop spans
+                    // over all displays. Solution: temporarily move windows around a bit.
+                    moveToDesktopIfRequired currentVirtualDesktop w
                     setWindowPosIfRequired w area)
         stackSet.Peek() |> Option.iter (fun hWnd -> User32.SetForegroundWindow(hWnd) |> ignore)
 
@@ -99,10 +119,9 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
         for hWnd in WinUtils.windows interesting do
             match desktopManager.GetDesktop(hWnd) with
             | Some desktop ->
-                stackSet <- stackSet.View(desktop.N - 1).InsertUp(hWnd)
+                stackSet <- stackSet.View(desktop.N).InsertUp(hWnd)
             | None -> ()
-        stackSet <- stackSet.View(0)
-        stackSet <- { stackSet with current = { stackSet.current with workspace = { stackSet.current.workspace with layout = Tall(0.7) } } }
+        stackSet <- stackSet.View(1)
         refresh()
 
     let switch_to_desktop = function
@@ -155,7 +174,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             if stackSet.current.workspace.layout.GetType() = typeof<Tall> then
                 stackSet <-
                     { stackSet with current = { stackSet.current with workspace = { stackSet.current.workspace with layout = Tall(newFraction) } } }
-                refresh ()
+                refresh()
         | None -> ()
 
     static let registerWinEventHook (manager: WindowManager<'I>) =
@@ -213,21 +232,10 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
         match User32.GetForegroundWindow() with
         | hWnd when hWnd <> IntPtr.Zero ->
             match User32.MonitorFromWindow(hWnd, User32.MONITOR_DEFAULTTONULL) with
-            | monitor_handle when monitor_handle <> IntPtr.Zero ->
-                match DisplayUtils.rectFromMonitorHandle monitor_handle with
-                | Some(rect) ->
-                    // WPF uses device-independent pixels, convert
-                    let mutable dpiX = 0u
-                    let mutable dpiY = 0u
-                    Shcore.GetDpiForMonitor(monitor_handle, Shcore.MONITOR_DPI_TYPE.MDT_EFFECTIVE_DPI, &dpiX, &dpiY)
-                    |> ignore
-                    let scaleX = 96.0 / double dpiX
-                    let scaleY = 96.0 / double dpiY
-                    let left = int (double rect.left * scaleX)
-                    let right = int (double rect.right * scaleX)
-                    let top = int (double rect.top * scaleY)
-                    let bottom = int (double rect.bottom * scaleY)
-                    Rectangle(left, top, right - left, bottom - top)
+            | monitorHandle when monitorHandle <> IntPtr.Zero ->
+                match DisplayUtils.rectFromMonitorHandle monitorHandle
+                      |> Option.map (DisplayUtils.toWpfPixels monitorHandle) with
+                | Some(rect) -> Rectangle.FromLTRB(rect.left, rect.top, rect.right, rect.left)
                 | None -> WindowManager<'I>.EmptyRect
             | _ -> WindowManager<'I>.EmptyRect
         | _ -> WindowManager<'I>.EmptyRect
@@ -236,19 +244,19 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
     /// The other windows are kept in order and shifted down on the stack.
     member this.RaiseToMain() =
         stackSet <- stackSet.RaiseToMain()
-        refresh ()
+        refresh()
 
     member this.FocusUp() =
         stackSet <- stackSet.FocusUp()
-        refresh ()
+        refresh()
 
     member this.FocusDown() =
         stackSet <- stackSet.FocusDown()
-        refresh ()
+        refresh()
 
     member this.FocusMain() =
         stackSet <- stackSet.FocusMain()
-        refresh ()
+        refresh()
 
     member this.CycleLayout() =
         let newLayout: Layout =
@@ -256,24 +264,27 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             else Tall(0.7) :> Layout
         stackSet <-
             { stackSet with current = { stackSet.current with workspace = { stackSet.current.workspace with layout = newLayout } } }
-        refresh ()
+        refresh()
 
     member internal this.HandleEvent(event: WorldEvent) =
         match event with
         | DesktopChanged ->
-            stackSet <- stackSet.View(desktopManager.GetCurrentDesktop().N - 1)
+            let currentDesktop = desktopManager.GetCurrentDesktop()
+            moveWindowsBackToBelongingDesktop currentDesktop
+            stackSet <- stackSet.View(currentDesktop.N)
             refresh()
         | WindowCreated hWnd when interesting hWnd -> manage hWnd
         | WindowDestroyed hWnd ->
             stackSet <- stackSet.Delete(hWnd)
             if onCurrentDesktop hWnd then
-                refresh ()
+                refresh()
         | WindowChangedLocation hWnd when stackSet.Contains(hWnd) && moving <> Some(hWnd) ->
             if onCurrentDesktop hWnd then
                 if User32.IsIconic(hWnd) then
                     User32.ShowWindow(hWnd, User32.SW_RESTORE) |> ignore
                 else
-                    refresh ()
+                    refresh()
+        // XXX desktop change
         | WindowFocused hWnd -> stackSet <- stackSet.Focus(hWnd)
         | WindowShown hWnd when interesting hWnd -> manage hWnd
         | WindowMoveSizeStart hWnd -> moving <- Some hWnd
@@ -282,14 +293,13 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             | Some { focus = f; up = [] } when f = hWnd ->
                 // Main window was changed, let layout handle that
                 handleMainWindowSizeChange hWnd
-            | _ -> refresh ()
+            | _ -> refresh()
             moving <- None
         | WindowCloaked hWnd ->
             match (desktopManager.GetDesktop(hWnd), stackSet.FindWorkspace(hWnd)) with
-            | (Some d, Some ws) when d.N - 1 <> ws.tag ->
-                // Window was moved to a different virtual desktop
-                stackSet <-
-                    stackSet.Delete(hWnd).OnWorkspace(d.N - 1, fun s -> s.InsertUp(hWnd))
-                refresh ()
+            | (Some d, Some ws) when d.N <> ws.tag && not (stackSet.IsOnSomeDisplay(ws.tag)) ->
+                // Window was moved to a different virtual desktop and it was not caused by Kolonnade itself
+                stackSet <- stackSet.Delete(hWnd).OnWorkspace(d.N, fun s -> s.InsertUp(hWnd))
+                refresh()
             | _ -> ()
         | _ -> ()

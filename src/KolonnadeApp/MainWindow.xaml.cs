@@ -183,7 +183,7 @@ namespace KolonnadeApp
                 Console.WriteLine("Well that wasn't successful :( :( :('");
             }
 
-            var mod = KeyModifiers.Alt | KeyModifiers.NoRepeat;
+            var mod = KeyModifiers.Alt | KeyModifiers.Control | KeyModifiers.NoRepeat;
             RegisterHotKey(hWnd, (int) HotKeys.CycleLayout, mod, VkSpace);
             RegisterHotKey(hWnd, (int) HotKeys.RaiseToMain, mod, VkReturn);
             RegisterHotKey(hWnd, (int) HotKeys.FocusDown, mod, 'J');

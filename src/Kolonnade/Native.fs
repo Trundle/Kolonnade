@@ -166,3 +166,6 @@ module private Shcore =
 
     [<DllImport("shcore.dll")>]
     extern uint32 GetDpiForMonitor(IntPtr hMonitor, MONITOR_DPI_TYPE dpiType, uint32& dpiX, uint32& dpiY)
+
+    [<DllImport("shcore.dll")>]
+    extern int GetProcessDpiAwareness(IntPtr hprocess, int& awareness)
