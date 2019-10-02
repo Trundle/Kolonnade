@@ -23,19 +23,9 @@ namespace KolonnadeApp
         private readonly List<Window> _windowList;
         private readonly List<Item> _viewList;
         private readonly History _history = new History(16);
+        private readonly int _hotkeyMessage = RegisterWindowMessage("KolonnadeHotKey");
         private const int WmHotkey = 0x0312;
-        private const uint VkReturn = 0x0d;
         private const uint VkSpace = 0x20;
-
-        enum HotKeys
-        {
-            Jumper = 1,
-            RaiseToMain,
-            FocusUp,
-            FocusDown,
-            FocusMain,
-            CycleLayout,
-        }
 
         public MainWindow()
         {
@@ -177,18 +167,11 @@ namespace KolonnadeApp
         {
             var interopHelper = new WindowInteropHelper(this);
             var hWnd = interopHelper.EnsureHandle();
-            if (!RegisterHotKey(hWnd, (int) HotKeys.Jumper, KeyModifiers.Shift | KeyModifiers.NoRepeat, VkSpace))
+            if (!RegisterHotKey(hWnd, 1, KeyModifiers.Shift | KeyModifiers.NoRepeat, VkSpace))
             {
                 // XXX Handle that somehow?
                 Console.WriteLine("Well that wasn't successful :( :( :('");
             }
-
-            var mod = KeyModifiers.Alt | KeyModifiers.Control | KeyModifiers.NoRepeat;
-            RegisterHotKey(hWnd, (int) HotKeys.CycleLayout, mod, VkSpace);
-            RegisterHotKey(hWnd, (int) HotKeys.RaiseToMain, mod, VkReturn);
-            RegisterHotKey(hWnd, (int) HotKeys.FocusDown, mod, 'J');
-            RegisterHotKey(hWnd, (int) HotKeys.FocusUp, mod, 'K');
-            RegisterHotKey(hWnd, (int) HotKeys.FocusMain, mod, 'M');
 
             var hwndSource = HwndSource.FromHwnd(hWnd);
             hwndSource.AddHook(OnMessage);
@@ -196,35 +179,56 @@ namespace KolonnadeApp
 
         private IntPtr OnMessage(IntPtr hwnd, int msg, IntPtr wparam, IntPtr lparam, ref bool handled)
         {
-            if (msg == WmHotkey)
+            if (msg == WmHotkey && wparam.ToInt32() == 1)
             {
-                switch ((HotKeys) wparam.ToInt32())
+                OnJumperHotKey();
+            }
+            else if (msg == _hotkeyMessage)
+            {
+                var key = (char) wparam.ToInt32();
+                if (lparam.ToInt32() == 0)
                 {
-                    case HotKeys.Jumper:
-                        OnHotKey();
-                        break;
-                    case HotKeys.RaiseToMain:
-                        _windowManager.RaiseToMain();
-                        break;
-                    case HotKeys.FocusUp:
-                        _windowManager.FocusUp();
-                        break;
-                    case HotKeys.FocusDown:
-                        _windowManager.FocusDown();
-                        break;
-                    case HotKeys.FocusMain:
-                        _windowManager.FocusMain();
-                        break;
-                    case HotKeys.CycleLayout:
-                        _windowManager.CycleLayout();
-                        break;
+                    HandleHotKey(key);
                 }
             }
 
             return IntPtr.Zero;
         }
 
-        private void OnHotKey()
+        private void HandleHotKey(char key)
+        {
+            switch (key)
+            {
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
+                    _windowManager.SwitchToDesktop(key - '1');
+                    break;
+                case 'j':
+                    _windowManager.FocusDown();
+                    break;
+                case 'k':
+                    _windowManager.FocusUp();
+                    break;
+                case 'm':
+                    _windowManager.FocusMain();
+                    break;
+                case '\r':
+                    _windowManager.RaiseToMain();
+                    break;
+                case ' ':
+                    _windowManager.CycleLayout();
+                    break;
+            }
+        }
+
+        private void OnJumperHotKey()
         {
             var monitorRect = _windowManager.GetActiveMonitor();
             if (!monitorRect.IsEmpty)
@@ -253,6 +257,9 @@ namespace KolonnadeApp
         [DllImport("USER32.DLL", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern bool RegisterHotKey(
             [In] IntPtr hWnd, [In] int id, [In] KeyModifiers fsModifiers, [In] uint vk);
+
+        [DllImport("user32.dll")]
+        private static extern int RegisterWindowMessage(string lpString);
 
         [Flags]
         private enum KeyModifiers : uint
