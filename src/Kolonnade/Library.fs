@@ -235,7 +235,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             | monitorHandle when monitorHandle <> IntPtr.Zero ->
                 match DisplayUtils.rectFromMonitorHandle monitorHandle
                       |> Option.map (DisplayUtils.toWpfPixels monitorHandle) with
-                | Some(rect) -> Rectangle.FromLTRB(rect.left, rect.top, rect.right, rect.left)
+                | Some(rect) -> Rectangle.FromLTRB(rect.left, rect.top, rect.right, rect.bottom)
                 | None -> WindowManager<'I>.EmptyRect
             | _ -> WindowManager<'I>.EmptyRect
         | _ -> WindowManager<'I>.EmptyRect
