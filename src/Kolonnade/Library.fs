@@ -114,6 +114,10 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
         stackSet <- stackSet.InsertUp(hWnd)
         refresh()
 
+    let desktopForTag tag =
+        if stackSet.ContainsTag(tag) then Some(desktopManager.GetDesktops().[tag - 1])
+        else None
+
     // Initialization
     do
         for hWnd in WinUtils.windows interesting do
@@ -246,6 +250,16 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
         stackSet <- stackSet.RaiseToMain()
         refresh()
 
+    /// Moves the focused element of the current stack to the workspace with the given
+    /// tag. Returns the same StackSet if the stack is empty. Doesn't change the focused
+    /// workspace.
+    member this.Shift(tag) =
+        stackSet.Peek()
+        |> Option.iter (fun w ->
+            stackSet <- stackSet.Shift(tag)
+            desktopForTag tag |> Option.iter (fun desktop -> desktop.MoveWindowTo(w))
+            refresh())
+
     member this.FocusUp() =
         stackSet <- stackSet.FocusUp()
         refresh()
@@ -299,7 +313,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             match (desktopManager.GetDesktop(hWnd), stackSet.FindWorkspace(hWnd)) with
             | (Some d, Some ws) when d.N <> ws.tag && not (stackSet.IsOnSomeDisplay(ws.tag)) ->
                 // Window was moved to a different virtual desktop and it was not caused by Kolonnade itself
-                stackSet <- stackSet.Delete(hWnd).OnWorkspace(d.N, fun s -> s.InsertUp(hWnd))
+                stackSet <- stackSet.ShiftWin(d.N, hWnd)
                 refresh()
             | _ -> ()
         | _ -> ()

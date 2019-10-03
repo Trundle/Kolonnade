@@ -87,6 +87,9 @@ type StackSet<'W, 'L when 'W: equality> =
     /// Returns whether this StackSet contains the given window.
     member this.Contains(w) = this.FindWorkspace(w).IsSome
 
+    /// Returns whether this StackSet contains the given tag.
+    member this.ContainsTag(tag) = this.Workspaces() |> List.map (fun ws -> ws.tag) |> List.contains tag
+
     /// Returns the focused element of the current stack (if there is one).
     member this.Peek() =
         this.current.workspace.stack |> Option.map (fun s -> s.focus)
@@ -153,6 +156,22 @@ type StackSet<'W, 'L when 'W: equality> =
             | { focus = focus; up = up; down = down } ->
                 { focus = focus; up = []; down = List.rev up @ down } )
 
+    /// Moves the focused element of the current stack to the workspace with the given
+    /// tag. Returns the same StackSet if the stack is empty. Doesn't change the focused
+    /// workspace.
+    member this.Shift(tag) =
+        match this.Peek() |> Option.map (fun w -> this.ShiftWin(tag, w)) with
+        | Some s -> s
+        | _ -> this
+
+    /// Searches for the given window on all workspaces and moves it to the workspace
+    /// with the given tag as focused window. Doesn't change the focused workspace.
+    member this.ShiftWin(tag, w) =
+        match this.FindWorkspace w with
+        | Some ws when ws.tag <> tag && this.ContainsTag(tag) ->
+            this.Delete(w).OnWorkspace(tag, fun s -> s.InsertUp(w))
+        | _ -> this
+
     /// Sets focus to the workspace with the given tag. Returns the stackset unmodified
     /// if the given tag doesn't exist.
     member this.View(t) =
@@ -175,7 +194,7 @@ type StackSet<'W, 'L when 'W: equality> =
                     this
 
     /// Perform the given action on the workspace with the given tag.
-    member this.OnWorkspace(t, f: StackSet<'W, 'L> -> StackSet<'W, 'L>) =
+    member this.OnWorkspace(t, f: StackSet<'W, 'L> -> StackSet<'W, 'L>): StackSet<'W, 'L> =
         this.View(t) |> f |> fun s -> s.View(this.CurrentTag())
 
     /// Returns whether the workspace with the given tag is currently visible on some display.

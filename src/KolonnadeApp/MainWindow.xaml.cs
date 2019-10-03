@@ -186,9 +186,14 @@ namespace KolonnadeApp
             else if (msg == _hotkeyMessage)
             {
                 var key = (char) wparam.ToInt32();
-                if (lparam.ToInt32() == 0)
+                switch ((KeyModifiers) lparam.ToInt32())
                 {
-                    HandleHotKey(key);
+                    case 0:
+                        HandleHotKey(key);
+                        break;
+                    case KeyModifiers.Shift:
+                        HandleShiftedHotKey(key);
+                        break;
                 }
             }
 
@@ -224,6 +229,25 @@ namespace KolonnadeApp
                     break;
                 case ' ':
                     _windowManager.CycleLayout();
+                    break;
+            }
+        }
+
+        private void HandleShiftedHotKey(char key)
+        {
+            switch (key)
+            {
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
+                    // Note that workspaces start at 1
+                    _windowManager.Shift(key - '0');
                     break;
             }
         }
