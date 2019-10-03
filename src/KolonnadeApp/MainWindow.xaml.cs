@@ -24,6 +24,7 @@ namespace KolonnadeApp
         private readonly List<Item> _viewList;
         private readonly History _history = new History(16);
         private readonly int _hotkeyMessage = RegisterWindowMessage("KolonnadeHotKey");
+        private readonly Queue<(char, KeyModifiers)> _hotkeyQueue = new Queue<(char, KeyModifiers)>();
         private const int WmHotkey = 0x0312;
         private const uint VkSpace = 0x20;
 
@@ -167,10 +168,10 @@ namespace KolonnadeApp
         {
             var interopHelper = new WindowInteropHelper(this);
             var hWnd = interopHelper.EnsureHandle();
-            if (!RegisterHotKey(hWnd, 1, KeyModifiers.Shift | KeyModifiers.NoRepeat, VkSpace))
+            if (!RegisterHotKey(hWnd, 1, KeyModifiers.Alt | KeyModifiers.Control | KeyModifiers.NoRepeat, VkSpace))
             {
-                // XXX Handle that somehow?
-                Console.WriteLine("Well that wasn't successful :( :( :('");
+                MessageBox.Show("Could not register hotkey, exiting…");
+                Application.Current.Shutdown();
             }
 
             var hwndSource = HwndSource.FromHwnd(hWnd);
@@ -181,20 +182,30 @@ namespace KolonnadeApp
         {
             if (msg == WmHotkey && wparam.ToInt32() == 1)
             {
-                OnJumperHotKey();
+                if (_hotkeyQueue.Count != 0)
+                {
+                    while (_hotkeyQueue.Count > 0)
+                    {
+                        var (key, modMask) = _hotkeyQueue.Dequeue();
+                        switch (modMask)
+                        {
+                            case 0:
+                                HandleHotKey(key);
+                                break;
+                            case KeyModifiers.Shift:
+                                HandleShiftedHotKey(key);
+                                break;
+                        }
+                    }
+                }
+                else
+                {
+                    OnJumperHotKey();
+                }
             }
             else if (msg == _hotkeyMessage)
             {
-                var key = (char) wparam.ToInt32();
-                switch ((KeyModifiers) lparam.ToInt32())
-                {
-                    case 0:
-                        HandleHotKey(key);
-                        break;
-                    case KeyModifiers.Shift:
-                        HandleShiftedHotKey(key);
-                        break;
-                }
+                _hotkeyQueue.Enqueue(((char) wparam.ToInt32(), (KeyModifiers) lparam.ToInt32()));
             }
 
             return IntPtr.Zero;
