@@ -26,7 +26,7 @@ namespace KolonnadeApp
         private readonly int _hotkeyMessage = RegisterWindowMessage("KolonnadeHotKey");
         private readonly Queue<(char, KeyModifiers)> _hotkeyQueue = new Queue<(char, KeyModifiers)>();
         private const int WmHotkey = 0x0312;
-        private const uint VkSpace = 0x20;
+        private const uint VkF13 = 0x7c;
 
         public MainWindow()
         {
@@ -168,7 +168,9 @@ namespace KolonnadeApp
         {
             var interopHelper = new WindowInteropHelper(this);
             var hWnd = interopHelper.EnsureHandle();
-            if (!RegisterHotKey(hWnd, 1, KeyModifiers.Alt | KeyModifiers.Control | KeyModifiers.NoRepeat, VkSpace))
+            // N.B. You also need to change WindowManager.ActivateViaHotkey() if you change the key here
+            if (!RegisterHotKey(hWnd, 1, KeyModifiers.NoRepeat, VkF13) ||
+                !RegisterHotKey(hWnd, 2, KeyModifiers.Shift | KeyModifiers.NoRepeat, VkF13))
             {
                 MessageBox.Show("Could not register hotkey, exiting…");
                 Application.Current.Shutdown();
@@ -180,32 +182,26 @@ namespace KolonnadeApp
 
         private IntPtr OnMessage(IntPtr hwnd, int msg, IntPtr wparam, IntPtr lparam, ref bool handled)
         {
-            if (msg == WmHotkey && wparam.ToInt32() == 1)
+            if (msg == WmHotkey && (wparam.ToInt32() == 1 || wparam.ToInt32() == 2))
             {
-                if (_hotkeyQueue.Count != 0)
+                while (_hotkeyQueue.Count > 0)
                 {
-                    while (_hotkeyQueue.Count > 0)
+                    var (key, modMask) = _hotkeyQueue.Dequeue();
+                    switch (modMask)
                     {
-                        var (key, modMask) = _hotkeyQueue.Dequeue();
-                        switch (modMask)
-                        {
-                            case 0:
-                                HandleHotKey(key);
-                                break;
-                            case KeyModifiers.Shift:
-                                HandleShiftedHotKey(key);
-                                break;
-                        }
+                        case 0:
+                            HandleHotKey(key);
+                            break;
+                        case KeyModifiers.Shift:
+                            HandleShiftedHotKey(key);
+                            break;
                     }
-                }
-                else
-                {
-                    OnJumperHotKey();
                 }
             }
             else if (msg == _hotkeyMessage)
             {
                 _hotkeyQueue.Enqueue(((char) wparam.ToInt32(), (KeyModifiers) lparam.ToInt32()));
+                _windowManager.ActivateViaHotkey();
             }
 
             return IntPtr.Zero;
@@ -225,6 +221,9 @@ namespace KolonnadeApp
                 case '8':
                 case '9':
                     _windowManager.SwitchToDesktop(key - '1');
+                    break;
+                case 'f':
+                    OnJumperHotKey();
                     break;
                 case 'j':
                     _windowManager.FocusDown();
