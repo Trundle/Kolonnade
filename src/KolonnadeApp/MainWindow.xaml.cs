@@ -240,6 +240,12 @@ namespace KolonnadeApp
                 case ' ':
                     _windowManager.CycleLayout();
                     break;
+                case 'h':
+                    _windowManager.PostMessage(ResizeMessage.Shrink);
+                    break;
+                case 'l':
+                    _windowManager.PostMessage(ResizeMessage.Expand);
+                    break;
             }
         }
 

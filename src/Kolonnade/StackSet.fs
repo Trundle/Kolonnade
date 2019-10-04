@@ -20,10 +20,12 @@ open Util
 type HMONITOR = IntPtr
 
 /// A stack is a cursor onto a window list. The main window is by convention the top-most item.
-type Stack<'A> =
+type Stack<'A> when 'A : equality =
     { focus: 'A
       up: 'A list
       down: 'A list }
+
+    member this.Contains(w) = List.contains w (this.ToList())
 
     member this.Filter(p) =
         match List.filter p (this.focus :: this.down) with
@@ -47,14 +49,14 @@ type Stack<'A> =
     member this.ToList() = List.rev this.up @ this.focus :: this.down
 
 
-type Workspace<'W, 'L> =
+type Workspace<'W, 'L> when 'W : equality =
     { tag: int // Note: starts at 1
       stack: Stack<'W> option
       layout: 'L
       desktop: VirtualDesktop.Desktop }
 
 /// A visible workspace
-type Display<'W, 'L> =
+type Display<'W, 'L> when 'W : equality =
     { n: int // Note: starts at 1
       workspace: Workspace<'W, 'L>
       monitor: HMONITOR }

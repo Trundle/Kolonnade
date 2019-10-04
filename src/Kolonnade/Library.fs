@@ -44,7 +44,8 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
     let window_icon_cache = LRUCache<User32.HWND, 'I option>(512)
     let mutable stackSet =
         StackSet.fromDesktops<User32.HWND, Layout> (desktopManager, List.ofSeq (DisplayUtils.getDisplays()), Full())
-    let mutable moving: User32.HWND option = None
+    let mutable moving: (User32.HWND * User32.RECT) option = None
+    let movingHwnd() = Option.map (fun (hWnd, _) -> hWnd) moving
 
     let interesting hWnd =
         let style: User32.WindowStyle = enum (int (User32.GetWindowLongPtr(hWnd, User32.GWL_STYLE).ToInt64()))
@@ -166,20 +167,6 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
         | (Some windowDesktop, currentDesktop) when windowDesktop.N = currentDesktop.N -> true
         | _ -> false
 
-    let handleMainWindowSizeChange hWnd =
-        match DisplayUtils.rectFromMonitorHandle stackSet.current.monitor with
-        | Some rect ->
-            // XXX this should be handled by current layout itself
-            let windowRect = WinUtils.windowFrameRect hWnd
-            let windowWidth = windowRect.right - windowRect.left
-            let displayWidth = rect.right - rect.left
-            let newFraction = float windowWidth / float displayWidth
-            if stackSet.current.workspace.layout.GetType() = typeof<Tall> then
-                stackSet <-
-                    { stackSet with current = { stackSet.current with workspace = { stackSet.current.workspace with layout = Tall(newFraction) } } }
-                refresh()
-        | None -> ()
-
     static let registerWinEventHook (manager: WindowManager<'I>) =
         let hook = User32.WINEVENTPROC(fun _ event hWnd idObject _ _ _ ->
             let isWindow = idObject = int User32.ObjId.Window
@@ -297,6 +284,12 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
         |]
         User32.SendInput(uint32 input.Length, input, Marshal.SizeOf<User32.INPUT>()) |> ignore
 
+    member this.PostMessage(msg) =
+        stackSet.current.workspace.layout.HandleMessage(msg) |> Option.iter (fun newLayout ->
+            let newWorkspace = { stackSet.current.workspace with layout = newLayout }
+            stackSet <- { stackSet with current = { stackSet.current with workspace = newWorkspace } }
+            refresh())
+
     member internal this.HandleEvent(event: WorldEvent) =
         match event with
         | DesktopChanged ->
@@ -309,7 +302,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             stackSet <- stackSet.Delete(hWnd)
             if onCurrentDesktop hWnd then
                 refresh()
-        | WindowChangedLocation hWnd when stackSet.Contains(hWnd) && moving <> Some(hWnd) ->
+        | WindowChangedLocation hWnd when stackSet.Contains(hWnd) && movingHwnd() <> Some hWnd ->
             if onCurrentDesktop hWnd then
                 if User32.IsIconic(hWnd) then
                     User32.ShowWindow(hWnd, User32.SW_RESTORE) |> ignore
@@ -318,13 +311,15 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
         // XXX desktop change
         | WindowFocused hWnd -> stackSet <- stackSet.Focus(hWnd)
         | WindowShown hWnd when interesting hWnd -> manage hWnd
-        | WindowMoveSizeStart hWnd -> moving <- Some hWnd
-        | WindowMoveSizeEnd hWnd ->
+        | WindowMoveSizeStart hWnd -> moving <- Some (hWnd, WinUtils.windowFrameRect hWnd)
+        | WindowMoveSizeEnd hWnd when moving.IsSome ->
             match stackSet.current.workspace.stack with
-            | Some { focus = f; up = [] } when f = hWnd ->
-                // Main window was changed, let layout handle that
-                handleMainWindowSizeChange hWnd
-            | _ -> refresh()
+            | Some stack when stack.Contains(hWnd) ->
+                let (hWnd, previousRect) = moving.Value
+                let rect = (WinUtils.windowFrameRect hWnd).ToRectangle()
+                this.PostMessage(ResizeMessage.WindowSizeChanged(stack, hWnd, previousRect.ToRectangle(), rect))
+                refresh()
+            | _ -> ()
             moving <- None
         | WindowCloaked hWnd ->
             match (desktopManager.GetDesktop(hWnd), stackSet.FindWorkspace(hWnd)) with

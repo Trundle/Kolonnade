@@ -1,6 +1,7 @@
 ﻿namespace Kolonnade
 
 open System
+open System.Drawing
 open System.Runtime.InteropServices
 open System.Text
 
@@ -38,6 +39,8 @@ module internal User32 =
           top: int
           right: int
           bottom: int }
+
+        member this.ToRectangle() = Rectangle.FromLTRB(this.left, this.top, this.right, this.bottom)
 
     [<Struct; StructLayout(LayoutKind.Sequential)>]
     type MONITORINFO =
