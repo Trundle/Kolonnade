@@ -1,5 +1,6 @@
 ﻿namespace Kolonnade
 
+open System
 open System.Drawing
 
 /// Marker interface for messages.
@@ -13,6 +14,9 @@ type ResizeMessage =
     | WindowSizeChanged of Stack<User32.HWND> * User32.HWND * Rectangle * Rectangle
     interface LayoutMessage
 
+type ChangeLayout =
+    | NextLayout
+    interface LayoutMessage
 
 type Layout =
     abstract member Description: string
@@ -83,3 +87,64 @@ type Tall(fraction) =
             match msg with
             | :? ResizeMessage as resizeMessage -> handleResizeMessage resizeMessage
             | _ -> None
+
+
+/// Whether the left or right layout is selected
+type LeftOrRight =
+    | Left
+    | Right
+// Internal messages for handling `NextLayout`
+type internal ChangeLayoutWrap =
+    | FirstLayout
+    | NextLayoutNoWrap
+    interface LayoutMessage
+/// A layout that allows a user to switch between various layouts.
+type Choose internal (selected: LeftOrRight, left: Layout, right: Layout) =
+    let handleChangeLayoutWrap = function
+        | NextLayoutNoWrap ->
+            match selected with
+            | Left -> match left.HandleMessage NextLayoutNoWrap with
+                        | Some l -> Some(Choose(Left, l, right) :> Layout)
+                        | None -> Some(Choose(Right, left, right) :> Layout)
+            | Right -> match right.HandleMessage NextLayoutNoWrap with
+                        | Some r -> Some(Choose(Right, left, r) :> Layout)
+                        | None -> None
+        | FirstLayout ->
+            match (left.HandleMessage(FirstLayout), right.HandleMessage(FirstLayout)) with
+            | Some l, Some r -> Some(Choose(Left, l, r) :> Layout)
+            | Some l, None -> Some(Choose(Left, l, right) :> Layout)
+            | None, Some r -> Some(Choose(Left, left, r) :> Layout)
+            | None, None -> Some(Choose(Left, left, right) :> Layout)
+
+    let handleChangeLayout = function
+        | NextLayout -> Option.orElseWith
+                            (fun () -> handleChangeLayoutWrap FirstLayout)
+                            (handleChangeLayoutWrap NextLayoutNoWrap)
+
+    let layout() =
+        match selected with
+        | Left -> left
+        | Right -> right
+
+    let handleMessage msg =
+        match layout().HandleMessage(msg) with
+        | Some newLayout ->
+            match selected with
+            | Left -> Some(Choose(selected, newLayout, right) :> Layout)
+            | Right -> Some(Choose(selected, left, newLayout) :> Layout)
+        | None -> None
+
+    static member between(first: Layout, second: Layout, [<ParamArray>] others: Layout[]) =
+        Array.fold (fun acc layout -> Choose(Left, acc, layout)) (Choose(Left, first, second)) others
+
+    interface Layout with
+        member this.Description = left.Description + " | " + right.Description
+
+        member this.DoLayout(stack: Stack<User32.HWND>, area: Rectangle) =
+            layout().DoLayout(stack, area)
+
+        member this.HandleMessage(msg) =
+            match msg with
+            | :? ChangeLayout as changeLayout -> handleChangeLayout changeLayout
+            | :? ChangeLayoutWrap as changeLayoutWrap -> handleChangeLayoutWrap changeLayoutWrap
+            | _ -> handleMessage msg

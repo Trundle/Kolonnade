@@ -238,7 +238,7 @@ namespace KolonnadeApp
                     _windowManager.RaiseToMain();
                     break;
                 case ' ':
-                    _windowManager.CycleLayout();
+                    _windowManager.PostMessage(ChangeLayout.NextLayout);
                     break;
                 case 'h':
                     _windowManager.PostMessage(ResizeMessage.Shrink);
