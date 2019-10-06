@@ -239,23 +239,8 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             | _ -> WindowManager<'I>.EmptyRect
         | _ -> WindowManager<'I>.EmptyRect
 
-    /// Raises the currently focused window to the main pane.
-    /// The other windows are kept in order and shifted down on the stack.
-    member this.RaiseToMain() =
-        stackSet <- stackSet.RaiseToMain()
-        refresh()
-
-    /// Swaps the currently focused window and the main pane. Focus stays with the item moved.
-    member this.SwapMain() =
-        stackSet <- stackSet.SwapMain()
-        refresh()
-
-    member this.SwapDown() =
-        stackSet <- stackSet.SwapDown()
-        refresh()
-
-    member this.SwapUp() =
-        stackSet <- stackSet.SwapUp()
+    member this.ModifyStackSet(f: System.Func<StackSet<User32.HWND, Layout>, StackSet<User32.HWND, Layout>>) =
+        stackSet <- f.Invoke(stackSet)
         refresh()
 
     /// Moves the focused element of the current stack to the workspace with the given
@@ -267,18 +252,6 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             stackSet <- stackSet.Shift(tag)
             desktopForTag tag |> Option.iter (fun desktop -> desktop.MoveWindowTo(w))
             refresh())
-
-    member this.FocusUp() =
-        stackSet <- stackSet.FocusUp()
-        refresh()
-
-    member this.FocusDown() =
-        stackSet <- stackSet.FocusDown()
-        refresh()
-
-    member this.FocusMain() =
-        stackSet <- stackSet.FocusMain()
-        refresh()
 
     /// Activate Kolonnade by injecting a hotkey keypress.
     /// Windows grants apps that received a hotkey message certain rights, such as setting the

@@ -226,16 +226,16 @@ namespace KolonnadeApp
                     OnJumperHotKey();
                     break;
                 case 'j':
-                    _windowManager.FocusDown();
+                    _windowManager.ModifyStackSet(s => s.FocusDown());
                     break;
                 case 'k':
-                    _windowManager.FocusUp();
+                    _windowManager.ModifyStackSet(s => s.FocusUp());
                     break;
                 case 'm':
-                    _windowManager.FocusMain();
+                    _windowManager.ModifyStackSet(s => s.FocusMain());
                     break;
                 case '\r':
-                    _windowManager.SwapMain();
+                    _windowManager.ModifyStackSet(s => s.SwapMain());
                     break;
                 case ' ':
                     _windowManager.PostMessage(ChangeLayout.NextLayout);
@@ -266,10 +266,10 @@ namespace KolonnadeApp
                     _windowManager.Shift(key - '0');
                     break;
                 case 'j':
-                    _windowManager.SwapDown();
+                    _windowManager.ModifyStackSet(s => s.SwapDown());
                     break;
                 case 'k':
-                    _windowManager.SwapUp();
+                    _windowManager.ModifyStackSet(s => s.SwapUp());
                     break;
             }
         }

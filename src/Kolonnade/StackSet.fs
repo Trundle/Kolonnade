@@ -180,7 +180,7 @@ type StackSet<'W, 'L when 'W: equality> =
     /// Moves the focused element of the current stack to the workspace with the given
     /// tag. Returns the same StackSet if the stack is empty. Doesn't change the focused
     /// workspace.
-    member this.Shift(tag) =
+    member internal this.Shift(tag) =
         match this.Peek() |> Option.map (fun w -> this.ShiftWin(tag, w)) with
         | Some s -> s
         | _ -> this
