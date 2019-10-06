@@ -235,7 +235,7 @@ namespace KolonnadeApp
                     _windowManager.FocusMain();
                     break;
                 case '\r':
-                    _windowManager.RaiseToMain();
+                    _windowManager.SwapMain();
                     break;
                 case ' ':
                     _windowManager.PostMessage(ChangeLayout.NextLayout);

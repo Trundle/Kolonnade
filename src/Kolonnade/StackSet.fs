@@ -158,6 +158,14 @@ type StackSet<'W, 'L when 'W: equality> =
             | { focus = focus; up = up; down = down } ->
                 { focus = focus; up = []; down = List.rev up @ down } )
 
+    /// Swaps the currently focused window and the main pane. Focus stays with the item moved.
+    member this.SwapMain() =
+        this.Modify'(function
+            | { up = [] } as stack -> stack // Already main
+            | stack ->
+                let upRev = List.rev stack.up
+                { focus = stack.focus; up = [];  down = upRev.Tail @ (upRev.Head :: stack.down) } )
+
     /// Moves the focused element of the current stack to the workspace with the given
     /// tag. Returns the same StackSet if the stack is empty. Doesn't change the focused
     /// workspace.
