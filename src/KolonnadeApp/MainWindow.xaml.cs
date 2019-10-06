@@ -249,6 +249,16 @@ namespace KolonnadeApp
                 case 'l':
                     _windowManager.PostMessage(ResizeMessage.Expand);
                     break;
+                // Focus display 1, 2, 3
+                case 'w':
+                    _windowManager.ViewDisplay(1);
+                    break;
+                case 'e':
+                    _windowManager.ViewDisplay(2);
+                    break;
+                case 'r':
+                    _windowManager.ViewDisplay(3);
+                    break;
             }
         }
 

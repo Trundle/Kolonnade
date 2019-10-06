@@ -177,6 +177,12 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
         | (Some windowDesktop, currentDesktop) when windowDesktop.N = currentDesktop.N -> true
         | _ -> false
 
+    /// Returns the workspace for the given display number.
+    let findWorkspaceForDisplay n =
+        stackSet.Displays()
+        |> List.tryFind (fun d -> d.n = n)
+        |> Option.map (fun d -> d.workspace)
+
     static let registerWinEventHook (manager: WindowManager<'I>) =
         let hook = User32.WINEVENTPROC(fun _ event hWnd idObject _ _ _ ->
             let isWindow = idObject = int User32.ObjId.Window
@@ -254,6 +260,12 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
         |> Option.iter (fun w ->
             stackSet <- stackSet.Shift(tag)
             desktopForTag tag |> Option.iter (fun desktop -> desktop.MoveWindowTo(w))
+            refresh())
+
+    member this.ViewDisplay(n) =
+        findWorkspaceForDisplay n
+        |> Option.iter (fun ws ->
+            stackSet <- stackSet.View(ws.tag)
             refresh())
 
     /// Activate Kolonnade by injecting a hotkey keypress.
