@@ -1,6 +1,5 @@
 ﻿namespace Kolonnade
 
-open System
 open System.Drawing
 
 /// Marker interface for messages.
@@ -23,23 +22,7 @@ type Layout =
     abstract member DoLayout : Stack<User32.HWND> * Rectangle -> (User32.HWND * Rectangle) list
     abstract member HandleMessage : LayoutMessage -> Layout option
 
-
-/// The simplest of all layouts: take up all space, focused window at top
-type Full() =
-    interface Layout with
-        member this.Description = "Full"
-
-        member this.DoLayout(stack: Stack<User32.HWND>, area: Rectangle) =
-            stack.ToList()
-            |> List.map(fun w -> (w, area))
-
-        member this.HandleMessage(_) = None
-
-
-// The Tall layout: actual tiling 🥳
-type Tall(fraction) =
-    let delta = 0.05
-
+module Layout =
     /// Divides the display into two rectangles with the given ration.
     let splitHorizontallyBy fraction (area : Rectangle) =
         let leftWidth = int (floor (float area.Width * fraction))
@@ -57,10 +40,31 @@ type Tall(fraction) =
             Rectangle(area.Left, area.Top, area.Width, smallHeight)
             :: splitVertically (n - 1) remaining
 
+    /// Helper for calculating split widths: Calculates a new fraction for a length given a fraction and a
+    /// corresponding length.
+    let internal calculateNewFraction fraction old now = fraction / float old * float now
+
+open Layout
+
+
+/// The simplest of all layouts: take up all space, focused window at top
+type Full() =
+    interface Layout with
+        member this.Description = "Full"
+
+        member this.DoLayout(stack: Stack<User32.HWND>, area: Rectangle) = [(stack.focus, area)]
+
+        member this.HandleMessage(_) = None
+
+
+// The Tall layout: actual tiling 🥳
+type Tall(fraction) =
+    let delta = 0.05
+
     let handleWindowSizeChange stack hWnd (oldRect : Rectangle) (newRect : Rectangle) =
         if stack.focus = hWnd then
             // Resizing the main pane is like sending Shrink/Expand (of exact size)
-            let newFract = fraction / float oldRect.Width * float newRect.Width
+            let newFract = calculateNewFraction fraction oldRect.Width newRect.Width
             Some(Tall(newFract) :> Layout)
         else None
 
@@ -76,12 +80,48 @@ type Tall(fraction) =
         else mainPane :: splitVertically (numberOfWindows - 1) otherPane
 
     interface Layout with
-        member this.Description = "Layout"
+        member this.Description = "Tall"
 
         member this.DoLayout(stack: Stack<User32.HWND>, area: Rectangle) =
             let windows = stack.ToList()
             let rectangles = tile fraction area (List.length windows)
             List.zip windows rectangles
+
+        member this.HandleMessage(msg) =
+            match msg with
+            | :? ResizeMessage as resizeMessage -> handleResizeMessage resizeMessage
+            | _ -> None
+
+
+/// A layout that splits the screen horizontally and shows two windows. The left window is always
+/// the main window, and the right is either the currently focused window or the second window in
+/// layout order.
+type TwoPane(split) =
+    let delta = 0.05
+
+    let handleWindowSizeChange stack hWnd (oldRect : Rectangle) (newRect : Rectangle) =
+        if stack.focus = hWnd then
+            // Resizing the main pane is like sending Shrink/Expand (of exact size)
+            let newFract = calculateNewFraction split oldRect.Width newRect.Width
+            Some(TwoPane(newFract) :> Layout)
+        else None
+
+    let handleResizeMessage = function
+        | Expand -> Some(TwoPane(min 1.0 (split + delta)) :> Layout)
+        | Shrink -> Some(TwoPane(max 0.0 (split - delta)) :> Layout)
+        | WindowSizeChanged(stack, hWnd, prev, now) -> handleWindowSizeChange stack hWnd prev now
+
+    interface Layout with
+        member this.Description = "TwoColumn"
+
+        member this.DoLayout(stack: Stack<User32.HWND>, area: Rectangle) =
+            let (left, right) = splitHorizontallyBy split area
+            match List.rev stack.up with
+            | main :: _ -> [(main, left); (stack.focus, right)]
+            | [] ->
+                match stack.down with
+                | next :: _ -> [(stack.focus, left); (next, right)]
+                | [] -> [(stack.focus, area)]
 
         member this.HandleMessage(msg) =
             match msg with
@@ -134,7 +174,7 @@ type Choose internal (selected: LeftOrRight, left: Layout, right: Layout) =
             | Right -> Some(Choose(selected, left, newLayout) :> Layout)
         | None -> None
 
-    static member between(first: Layout, second: Layout, [<ParamArray>] others: Layout[]) =
+    static member between(first: Layout, second: Layout, [<System.ParamArray>] others: Layout[]) =
         Array.fold (fun acc layout -> Choose(Left, acc, layout)) (Choose(Left, first, second)) others
 
     interface Layout with

@@ -43,7 +43,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
     let processNameCache = LRUCache<User32.HWND, string option>(512)
     let window_icon_cache = LRUCache<User32.HWND, 'I option>(512)
     let mutable stackSet =
-        let layout = Choose.between(Full(), Tall(0.7))
+        let layout = Choose.between(Full(), TwoPane(0.5), Tall(0.7))
         StackSet.fromDesktops<User32.HWND, Layout> (desktopManager, List.ofSeq (DisplayUtils.getDisplays()), layout)
     let mutable moving: (User32.HWND * User32.RECT) option = None
     let movingHwnd() = Option.map (fun (hWnd, _) -> hWnd) moving
@@ -71,7 +71,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             let rightBorderWidth = windowRect.right - actualRect.right
             let topBorderWidth = actualRect.top - windowRect.top
             let bottomBorderWidth = windowRect.bottom - actualRect.bottom
-            let flags = uint32 (User32.SwpFlags.NoActivate ||| User32.SwpFlags.NoZOrder)
+            let flags = uint32 (User32.SwpFlags.NoActivate ||| User32.SwpFlags.ShowWindow)
             User32.SetWindowPos (hWnd, IntPtr.Zero,
                                  area.Left - leftBorderWidth,
                                  area.Top - topBorderWidth,
@@ -95,6 +95,10 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
                 display.workspace.stack
                 |> Option.iter (fun stack -> List.iter (fun w -> moveToDesktopIfRequired targetDesktop w) (stack.ToList()))
 
+    let moveToBackground hWnd =
+        let flags = uint32 (User32.SwpFlags.NoActivate ||| User32.SwpFlags.NoMove ||| User32.SwpFlags.NoSize)
+        User32.SetWindowPos(hWnd, User32.HWND_BOTTOM, 0, 0, 0, 0, flags) |> ignore
+
     let refresh() =
         let currentVirtualDesktop = desktopManager.GetCurrentDesktop()
         // For each display, layout the currently visible workspace
@@ -103,12 +107,16 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             |> Option.iter (fun stack ->
                 // XXX how to handle here that the display area can't be determined?
                 let displayArea = DisplayUtils.rectangleFromMonitorHandle display.monitor
+                let mutable notSeen = Set(stack.ToList())
                 for (w, area) in display.workspace.layout.DoLayout(stack, displayArea.Value) do
                     // This is where integrating seamless into Windows fails a bit: we want to display
                     // multiple workspaces at once, one at each display, but a virtual desktop spans
                     // over all displays. Solution: temporarily move windows around a bit.
                     moveToDesktopIfRequired currentVirtualDesktop w
-                    setWindowPosIfRequired w area)
+                    setWindowPosIfRequired w area
+                    notSeen <- notSeen.Remove(w)
+                for w in notSeen do
+                    moveToBackground w)
         stackSet.Peek() |> Option.iter (fun hWnd -> User32.SetForegroundWindow(hWnd) |> ignore)
 
     let manage hWnd =

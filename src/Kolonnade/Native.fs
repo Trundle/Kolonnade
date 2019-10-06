@@ -123,7 +123,10 @@ module internal User32 =
     /// SetWindowPos flags
     [<FlagsAttribute>]
     type SwpFlags =
+        | NoSize = 0x0001u
+        | NoMove = 0x0002u
         | NoZOrder = 0x0004u
+        | NoRedraw = 0x0008u
         | NoActivate = 0x0010u
         | ShowWindow = 0x0040u
 
