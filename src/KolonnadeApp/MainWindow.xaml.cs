@@ -265,6 +265,12 @@ namespace KolonnadeApp
                     // Note that workspaces start at 1
                     _windowManager.Shift(key - '0');
                     break;
+                case 'j':
+                    _windowManager.SwapDown();
+                    break;
+                case 'k':
+                    _windowManager.SwapUp();
+                    break;
             }
         }
 

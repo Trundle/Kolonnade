@@ -250,6 +250,14 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
         stackSet <- stackSet.SwapMain()
         refresh()
 
+    member this.SwapDown() =
+        stackSet <- stackSet.SwapDown()
+        refresh()
+
+    member this.SwapUp() =
+        stackSet <- stackSet.SwapUp()
+        refresh()
+
     /// Moves the focused element of the current stack to the workspace with the given
     /// tag. Returns the same StackSet if the stack is empty. Doesn't change the focused
     /// workspace.

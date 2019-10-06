@@ -43,6 +43,11 @@ type Stack<'A> when 'A : equality =
             | x :: xs -> { focus = x; up = xs; down = [] }
             | _ -> failwith "Not possible to reach, but also not possible to let F# know :("
 
+    member this.SwapUp() =
+        match this.up with
+        | u :: us -> { focus = this.focus; up = us; down = u :: this.down }
+        | [] -> { focus = this.focus; up = List.rev this.down; down = [] }
+
     /// Reverses this stack: up becomes down and down becomes up
     member this.Reverse() = { focus = this.focus; down = this.up; up = this.down }
 
@@ -165,6 +170,12 @@ type StackSet<'W, 'L when 'W: equality> =
             | stack ->
                 let upRev = List.rev stack.up
                 { focus = stack.focus; up = [];  down = upRev.Tail @ (upRev.Head :: stack.down) } )
+
+    /// Swaps the focused window with the previous. Wraps around if the end of stack is reached.
+    member this.SwapUp() = this.Modify'(fun s -> s.SwapUp())
+
+    /// Swaps the focused window with the next. Wraps around if the end of stack is reached.
+    member this.SwapDown() = this.Modify'(fun s -> s.Reverse().SwapUp().Reverse())
 
     /// Moves the focused element of the current stack to the workspace with the given
     /// tag. Returns the same StackSet if the stack is empty. Doesn't change the focused
