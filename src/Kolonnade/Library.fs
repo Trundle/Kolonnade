@@ -48,6 +48,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
     let mutable moving: (User32.HWND * User32.RECT) option = None
     let movingHwnd() = Option.map (fun (hWnd, _) -> hWnd) moving
 
+    /// Returns whether the given hWnd should be handled by Kolonnade.
     let interesting hWnd =
         let style: User32.WindowStyle = enum (int (User32.GetWindowLongPtr(hWnd, User32.GWL_STYLE).ToInt64()))
         let exStyle: User32.ExtendedWindowStyle = enum (int (User32.GetWindowLongPtr(hWnd, User32.GWL_EXSTYLE).ToInt64()))
@@ -286,9 +287,9 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             refresh()
         | WindowCreated hWnd when interesting hWnd -> manage hWnd
         | WindowDestroyed hWnd ->
+            let workspace = stackSet.FindWorkspace(hWnd)
             stackSet <- stackSet.Delete(hWnd)
-            if onCurrentDesktop hWnd then
-                refresh()
+            Option.iter (fun ws -> if stackSet.IsOnSomeDisplay(ws.tag) then refresh()) workspace
         | WindowChangedLocation hWnd when stackSet.Contains(hWnd) && movingHwnd() <> Some hWnd ->
             if onCurrentDesktop hWnd then
                 if User32.IsIconic(hWnd) then
