@@ -27,6 +27,7 @@ type Window<'I when 'I: null> internal (process_name: string option,
 
 type internal WorldEvent =
     | DesktopChanged
+    | DisplaysChanged
     | TitleChanged of User32.HWND
     | WindowCreated of User32.HWND
     | WindowDestroyed of User32.HWND
@@ -183,6 +184,10 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
         |> List.tryFind (fun d -> d.n = n)
         |> Option.map (fun d -> d.workspace)
 
+    let handleDisplayChange() =
+        stackSet <- StackSet.fromCurrentAndDisplays(stackSet, List.ofSeq(DisplayUtils.getDisplays()))
+        refresh()
+
     static let registerWinEventHook (manager: WindowManager<'I>) =
         let hook = User32.WINEVENTPROC(fun _ event hWnd idObject _ _ _ ->
             let isWindow = idObject = int User32.ObjId.Window
@@ -197,7 +202,12 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             | User32.WinEvent.SystemMoveSizeEnd -> manager.HandleEvent(WindowMoveSizeEnd hWnd)
             | User32.WinEvent.ObjectCreate when isWindow -> manager.HandleEvent(WindowCreated hWnd)
             | User32.WinEvent.ObjectDestroy when isWindow -> manager.HandleEvent(WindowDestroyed hWnd)
-            | User32.WinEvent.ObjectLocationchange when isWindow -> manager.HandleEvent(WindowChangedLocation hWnd)
+            | User32.WinEvent.ObjectLocationchange when isWindow ->
+                if hWnd = User32.GetShellWindow() then
+                    // If the shell window changes size (location), either the DPI for a display
+                    // was changed or a display was added or removed.
+                    manager.HandleEvent(DisplaysChanged)
+                else manager.HandleEvent(WindowChangedLocation hWnd)
             | User32.WinEvent.ObjectCloaked when isWindow -> manager.HandleEvent(WindowCloaked hWnd)
             | User32.WinEvent.ObjectShow when isWindow -> manager.HandleEvent(WindowShown hWnd)
             // XXX needs to be handled?
@@ -299,6 +309,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             moveWindowsBackToBelongingDesktop currentDesktop.N
             stackSet <- stackSet.View(currentDesktop.N)
             refresh()
+        | DisplaysChanged -> handleDisplayChange()
         | WindowCreated hWnd when interesting hWnd -> manage hWnd
         | WindowDestroyed hWnd ->
             let workspace = stackSet.FindWorkspace(hWnd)

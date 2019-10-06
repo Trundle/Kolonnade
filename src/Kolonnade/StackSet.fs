@@ -239,3 +239,11 @@ module internal StackSet =
                             { n = i + 1; workspace = workspace; monitor = handle; })
                             (List.zip displayRects seen)
         { current = displays.Head; visible = displays.Tail; hidden = unseen }
+
+    let fromCurrentAndDisplays(current: StackSet<'W, 'L>,
+                               displayRects: (HMONITOR * User32.RECT) list) =
+        let (seen, unseen) = List.splitAt (List.length displayRects) (current.Workspaces())
+        let displays = List.mapi (fun i ((handle, _), workspace) ->
+                                  { n = i + 1; workspace = workspace; monitor = handle; })
+                                  (List.zip (List.ofSeq displayRects) seen)
+        { current = displays.Head; visible = displays.Tail; hidden = unseen }
