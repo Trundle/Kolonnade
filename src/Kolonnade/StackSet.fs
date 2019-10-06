@@ -195,7 +195,7 @@ type StackSet<'W, 'L when 'W: equality> =
 
     /// Sets focus to the workspace with the given tag. Returns the stackset unmodified
     /// if the given tag doesn't exist.
-    member this.View(t) =
+    member internal this.View(t) =
         // Already focused
         if t = this.CurrentTag() then this
         else

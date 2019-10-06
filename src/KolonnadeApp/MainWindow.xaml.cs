@@ -60,7 +60,7 @@ namespace KolonnadeApp
                 case Key.D7:
                 case Key.D8:
                 case Key.D9:
-                    HandleNumberPress(e.Key - Key.D1);
+                    HandleNumberPress(e.Key - Key.D0);
                     break;
                 case Key.NumPad1:
                 case Key.NumPad2:
@@ -71,7 +71,7 @@ namespace KolonnadeApp
                 case Key.NumPad7:
                 case Key.NumPad8:
                 case Key.NumPad9:
-                    HandleNumberPress(e.Key - Key.NumPad1);
+                    HandleNumberPress(e.Key - Key.NumPad0);
                     break;
                 case Key.Escape:
                     ResetAndHide();
@@ -91,7 +91,7 @@ namespace KolonnadeApp
         {
             if (string.IsNullOrEmpty(_searchText))
             {
-                _windowManager.SwitchToDesktop(choice);
+                _windowManager.SwitchToWorkspace(choice);
             }
             else
             {
@@ -220,11 +220,12 @@ namespace KolonnadeApp
                 case '7':
                 case '8':
                 case '9':
-                    _windowManager.SwitchToDesktop(key - '1');
+                    _windowManager.SwitchToWorkspace(key - '0');
                     break;
                 case 'f':
                     OnJumperHotKey();
                     break;
+                // Change focus
                 case 'j':
                     _windowManager.ModifyStackSet(s => s.FocusDown());
                     break;
@@ -237,9 +238,11 @@ namespace KolonnadeApp
                 case '\r':
                     _windowManager.ModifyStackSet(s => s.SwapMain());
                     break;
+                // Cycle layout
                 case ' ':
                     _windowManager.PostMessage(ChangeLayout.NextLayout);
                     break;
+                // Shrink / expand
                 case 'h':
                     _windowManager.PostMessage(ResizeMessage.Shrink);
                     break;

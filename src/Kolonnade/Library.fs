@@ -89,10 +89,12 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
     /// Moves all windows back to the desktop where they originally belonged to, but were moved
     /// due to Kolonnade's multi-workspace support.
     /// This should be called before the stackSet has been updated after a desktop switch.
-    let moveWindowsBackToBelongingDesktop (newDesktop: VirtualDesktop.Desktop) =
+    let moveWindowsBackToBelongingDesktop (newDesktop: int) =
+        let newWorkspaces = Set <| List.map (fun d -> d.workspace.tag) (stackSet.View(newDesktop).Displays())
         for display in stackSet.Displays() do
-            if display.workspace.tag <> newDesktop.N then
-                let targetDesktop = desktopManager.GetDesktops().[display.workspace.tag - 1]
+            let tag = display.workspace.tag
+            if not(newWorkspaces.Contains(tag)) then
+                let targetDesktop = desktopManager.GetDesktops().[tag - 1]
                 display.workspace.stack
                 |> Option.iter (fun stack -> List.iter (fun w -> moveToDesktopIfRequired targetDesktop w) (stack.ToList()))
 
@@ -101,7 +103,15 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
         User32.SetWindowPos(hWnd, User32.HWND_BOTTOM, 0, 0, 0, 0, flags) |> ignore
 
     let refresh() =
-        let currentVirtualDesktop = desktopManager.GetCurrentDesktop()
+        // This is where integrating seamless into Windows fails a bit: we want to display multiple
+        // workspaces at once, one at each display, but a virtual desktop spans over all displays.
+        // Solution: temporarily move windows around a bit. The target desktop is either the
+        // current virtual desktop (if it corresponds to a workspace), otherwise to the virtual
+        // desktop of the current workspace.
+        let targetDesktop =
+            match desktopManager.GetCurrentDesktop() with
+            | d when stackSet.IsOnSomeDisplay(d.N) -> d
+            | _ -> desktopManager.GetDesktops().[stackSet.current.workspace.tag - 1]
         // For each display, layout the currently visible workspace
         for display in stackSet.Displays() do
             display.workspace.stack
@@ -110,10 +120,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
                 let displayArea = DisplayUtils.rectangleFromMonitorHandle display.monitor
                 let mutable notSeen = Set(stack.ToList())
                 for (w, area) in display.workspace.layout.DoLayout(stack, displayArea.Value) do
-                    // This is where integrating seamless into Windows fails a bit: we want to display
-                    // multiple workspaces at once, one at each display, but a virtual desktop spans
-                    // over all displays. Solution: temporarily move windows around a bit.
-                    moveToDesktopIfRequired currentVirtualDesktop w
+                    moveToDesktopIfRequired targetDesktop w
                     setWindowPosIfRequired w area
                     notSeen <- notSeen.Remove(w)
                 for w in notSeen do
@@ -137,13 +144,6 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             | None -> ()
         stackSet <- stackSet.View(1)
         refresh()
-
-    let switch_to_desktop = function
-    | i when i < 0 -> ()
-    | i ->
-        let desktops = desktopManager.GetDesktops()
-        if i < desktops.Count then
-            desktops.[i].SwitchTo()
 
     let determineProcess hWnd =
         match processNameCache.Get(hWnd) with
@@ -225,8 +225,10 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
                 Seq.singleton (Window(cleanUpProcessName process_name, desktop, hWnd, title, icon))
             )
 
-    member this.SwitchToDesktop(i) =
-        switch_to_desktop i
+    member this.SwitchToWorkspace(i) =
+        moveWindowsBackToBelongingDesktop i
+        stackSet <- stackSet.View(i)
+        refresh()
 
     member this.GetActiveMonitor() =
         match User32.GetForegroundWindow() with
@@ -282,7 +284,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
         match event with
         | DesktopChanged ->
             let currentDesktop = desktopManager.GetCurrentDesktop()
-            moveWindowsBackToBelongingDesktop currentDesktop
+            moveWindowsBackToBelongingDesktop currentDesktop.N
             stackSet <- stackSet.View(currentDesktop.N)
             refresh()
         | WindowCreated hWnd when interesting hWnd -> manage hWnd
