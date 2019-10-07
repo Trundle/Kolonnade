@@ -259,6 +259,10 @@ namespace KolonnadeApp
                 case 'r':
                     _windowManager.ViewDisplay(3);
                     break;
+                // Lock screen (the key next to 'l' in Neo2 layout, as Win+l is already taken)
+                case 'c':
+                    LockWorkStation();
+                    break;
             }
         }
 
@@ -319,6 +323,9 @@ namespace KolonnadeApp
 
         [DllImport("user32.dll")]
         private static extern int RegisterWindowMessage(string lpString);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool LockWorkStation();
 
         [Flags]
         private enum KeyModifiers : uint
