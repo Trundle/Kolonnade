@@ -251,9 +251,11 @@ namespace KolonnadeApp
                     break;
                 // Focus display 1, 2, 3
                 case 'w':
+                case 'i':
                     _windowManager.ViewDisplay(1);
                     break;
                 case 'e':
+                case 'a':
                     _windowManager.ViewDisplay(2);
                     break;
                 case 'r':
