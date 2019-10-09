@@ -126,7 +126,13 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
                     notSeen <- notSeen.Remove(w)
                 for w in notSeen do
                     moveToBackground w)
-        stackSet.Peek() |> Option.iter (fun hWnd -> User32.SetForegroundWindow(hWnd) |> ignore)
+        // Activate focused window or switch to desktop if stack is empty
+        match stackSet.Peek() with
+        | Some hWnd -> User32.SetForegroundWindow(hWnd) |> ignore
+        | None ->
+            let currentTag = stackSet.current.workspace.tag
+            if stackSet.visible.IsEmpty && desktopManager.GetCurrentDesktop().N <> currentTag
+            then desktopManager.GetDesktops().[currentTag - 1].SwitchTo()
 
     let manage hWnd =
         stackSet <- stackSet.InsertUp(hWnd)
