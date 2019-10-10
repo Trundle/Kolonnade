@@ -5,7 +5,7 @@
              xmlns:local="clr-namespace:KolonnadeApp"
              StartupUri="MainWindow.xaml">
 <Application.Resources>
-    <Style x:Key="BasicStyleForAllComponents" TargetType="{x:Type Window}">
+    <Style x:Key="BasicStyleForAllComponents" TargetType="{x:Type local:SearchableSelectList}">
         <Setter Property="FontFamily" Value="PragmataPro Liga" />
     </Style>
 </Application.Resources>

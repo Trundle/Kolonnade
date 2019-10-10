@@ -1,12 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Data;
-using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -17,151 +14,26 @@ namespace KolonnadeApp
 {
     public partial class MainWindow : System.Windows.Window
     {
-        public ListCollectionView Selectables { get; set; }
-        private string _searchText = "";
         private readonly WindowManager<BitmapSource> _windowManager = WindowManager<BitmapSource>.New(IconLoader);
-        private readonly List<Window> _windowList;
-        private readonly List<Item> _viewList;
-        private readonly History _history = new History(16);
+        private readonly List<object> _viewList = new List<object>();
         private readonly int _hotkeyMessage = RegisterWindowMessage("KolonnadeHotKey");
         private readonly Queue<(char, KeyModifiers)> _hotkeyQueue = new Queue<(char, KeyModifiers)>();
+        private readonly ISelectable _windowSelectable;
+        private readonly ISelectable _layoutSelectable;
+        private ISelectable _selectable;
         private const int WmHotkey = 0x0312;
         private const uint VkF13 = 0x7c;
 
         public MainWindow()
         {
-            _windowList = new List<Window>(_windowManager.GetWindows());
-            _viewList = new List<Item>();
-            Selectables = new ListCollectionView(_viewList);
-            UpdateViewList();
-
             InitializeComponent();
-            SearchInput.Focus();
+            _windowSelectable = new WindowSelectable(_windowManager.GetWindows, _viewList);
+            _layoutSelectable = new LayoutSelectable(_windowManager, _viewList);
+            _selectable = _windowSelectable;
+            SelectList.Selectables = new ListCollectionView(_viewList);
+            UpdateViewList("");
 
             RegisterHotKeys();
-        }
-
-        private bool SearchFilter(Window w)
-        {
-            return w.Title.ToLower().Contains(_searchText)
-                   || (w.Process != null && w.Process.ToLower().Contains(_searchText));
-        }
-
-        private void MainWindow_OnKeyDown(object sender, KeyEventArgs e)
-        {
-            switch (e.Key)
-            {
-                case Key.D1:
-                case Key.D2:
-                case Key.D3:
-                case Key.D4:
-                case Key.D5:
-                case Key.D6:
-                case Key.D7:
-                case Key.D8:
-                case Key.D9:
-                    HandleNumberPress(e.Key - Key.D0);
-                    break;
-                case Key.NumPad1:
-                case Key.NumPad2:
-                case Key.NumPad3:
-                case Key.NumPad4:
-                case Key.NumPad5:
-                case Key.NumPad6:
-                case Key.NumPad7:
-                case Key.NumPad8:
-                case Key.NumPad9:
-                    HandleNumberPress(e.Key - Key.NumPad0);
-                    break;
-                case Key.Escape:
-                    ResetAndHide();
-                    break;
-                case Key.Enter:
-                    if (SelectBox.SelectedIndex >= 0)
-                    {
-                        ToForeground(SelectBox.SelectedIndex);
-                    }
-
-                    ResetAndHide();
-                    break;
-            }
-        }
-
-        private void HandleNumberPress(int choice)
-        {
-            if (string.IsNullOrEmpty(_searchText))
-            {
-                _windowManager.SwitchToWorkspace(choice);
-            }
-            else
-            {
-                QuickSelect(choice);
-            }
-
-            ResetAndHide();
-        }
-
-        private void MainWindow_OnKeyUp(object sender, KeyEventArgs e)
-        {
-            switch (e.Key)
-            {
-                case Key.Down:
-                    SelectNext();
-                    break;
-                case Key.Up:
-                    SelectPrevious();
-                    break;
-            }
-        }
-
-        private void QuickSelect(in int choice)
-        {
-            if (choice < Selectables.Count)
-            {
-                ToForeground(choice);
-            }
-        }
-
-        private void SelectPrevious()
-        {
-            if (SelectBox.HasItems)
-            {
-                if (SelectBox.SelectedIndex > 0)
-                {
-                    SelectBox.SelectedIndex -= 1;
-                }
-                else
-                {
-                    SelectBox.SelectedIndex = SelectBox.Items.Count - 1;
-                    SelectBox.ScrollIntoView(SelectBox.SelectedItem);
-                }
-            }
-        }
-
-        private void SelectNext()
-        {
-            if (SelectBox.HasItems)
-            {
-                SelectBox.SelectedIndex = (SelectBox.SelectedIndex + 1) % SelectBox.Items.Count;
-                SelectBox.ScrollIntoView(SelectBox.SelectedItem);
-            }
-        }
-
-        private void ToForeground(int index)
-        {
-            var window = (Selectables.GetItemAt(index) as Item).Window;
-            _history.Append(window);
-            window.ToForeground();
-        }
-
-        private void SearchInput_OnTextChanged(object sender, TextChangedEventArgs e)
-        {
-            _searchText = ((TextBox) sender).Text.ToLower();
-            UpdateViewList();
-            if (SelectBox.HasItems && SelectBox.SelectedIndex < 0)
-            {
-                SelectBox.SelectedIndex = 0;
-            }
         }
 
         private void RegisterHotKeys()
@@ -223,7 +95,7 @@ namespace KolonnadeApp
                     _windowManager.SwitchToWorkspace(key - '0');
                     break;
                 case 'f':
-                    OnJumperHotKey();
+                    OnWindowJumperHotKey();
                     break;
                 // Change focus
                 case 'j':
@@ -290,10 +162,28 @@ namespace KolonnadeApp
                 case 'k':
                     _windowManager.ModifyStackSet(s => s.SwapUp());
                     break;
+                // Select layout
+                case ' ':
+                    OnLayoutJumperHotKey();
+                    break;
             }
         }
 
-        private void OnJumperHotKey()
+        private void OnWindowJumperHotKey()
+        {
+            _selectable = _windowSelectable;
+            SelectList.ItemTemplate = Resources["WindowListItem"] as DataTemplate;
+            CommonJumperHotKey();
+        }
+
+        private void OnLayoutJumperHotKey()
+        {
+            _selectable = _layoutSelectable;
+            SelectList.ItemTemplate = Resources["LayoutListItem"] as DataTemplate;
+            CommonJumperHotKey();
+        }
+
+        private void CommonJumperHotKey()
         {
             var monitorRect = _windowManager.GetActiveMonitor();
             if (!monitorRect.IsEmpty)
@@ -305,17 +195,15 @@ namespace KolonnadeApp
             Reset();
             Show();
             Opacity = 1;
-            SearchInput.Focus();
+            SelectList.Focus();
             Activate();
         }
 
         private void Reset()
         {
-            SearchInput.Text = "";
-            // XXX this could replace the list now
-            _windowList.Clear();
-            _windowList.AddRange(_windowManager.GetWindows());
-            UpdateViewList();
+            SelectList.Reset();
+            _selectable.Reset();
+            UpdateViewList("");
             InvalidateVisual();
         }
 
@@ -353,19 +241,10 @@ namespace KolonnadeApp
             }
         }
 
-        private void UpdateViewList()
+        private void UpdateViewList(string searchText)
         {
-            _viewList.Clear();
-            _viewList.AddRange(_windowList
-                .Where(SearchFilter)
-                .OrderBy(x => x, _history.Comparer)
-                .Select((w, i) =>
-                {
-                    var shortCut = _searchText.Length == 0 ? " " : (i + 1).ToString();
-                    return new Item(shortCut, w);
-                })
-            );
-            Selectables.Refresh();
+            _selectable.UpdateSelectionItems(searchText);
+            SelectList.Selectables.Refresh();
         }
 
         private void ResetAndHide()
@@ -377,7 +256,7 @@ namespace KolonnadeApp
             // To work around that, first "hide" the window by setting its opacity to 0, then reset
             // the UI state and in the next event loop run, finally hide the window.
             Opacity = 0;
-            SearchInput.Text = string.Empty;
+            SelectList.Reset();
             Dispatcher.BeginInvoke(Hide, DispatcherPriority.Input);
         }
 
@@ -388,88 +267,10 @@ namespace KolonnadeApp
                 Int32Rect.Empty,
                 BitmapSizeOptions.FromEmptyOptions());
         }
-    }
 
-    class Item
-    {
-        public string ShortCut { get; }
-        public Window Window { get; }
-
-        public Item(string shortCut, Window window)
+        private void SelectList_OnSelected(object item)
         {
-            ShortCut = shortCut;
-            Window = window;
-        }
-    }
-
-    class History
-    {
-        public int MaxSize { get; }
-        private readonly LinkedList<Id> _history = new LinkedList<Id>();
-
-        public History(int maxSize)
-        {
-            MaxSize = maxSize;
-        }
-
-        public IComparer<Window> Comparer
-        {
-            get => new HistoryComparer(() => _history);
-        }
-
-        public void Append(Window value)
-        {
-            _history.Remove(value.Id);
-            _history.AddFirst(value.Id);
-            if (_history.Count > MaxSize)
-            {
-                _history.RemoveLast();
-            }
-        }
-
-        class HistoryComparer : IComparer<Window>
-        {
-            private readonly Func<LinkedList<Id>> _history;
-
-            public HistoryComparer(Func<LinkedList<Id>> history)
-            {
-                _history = history;
-            }
-
-            public int Compare(Window x, Window y)
-            {
-                if (x == null && y == null)
-                {
-                    return 0;
-                }
-
-                if (x == null)
-                {
-                    return -1;
-                }
-
-                if (y == null)
-                {
-                    return 1;
-                }
-
-                var yIndex = _history().TakeWhile(e => !e.Equals(y.Id)).Count();
-                var xIndex = _history().TakeWhile(e => !e.Equals(x.Id)).Count();
-
-                // It's rather unlikely that one wants to switch to the same window again,
-                // hence swap first and second window
-                if (xIndex == 0 && yIndex == 1)
-                {
-                    return 1;
-                }
-
-                if (yIndex == 0 && xIndex == 1)
-                {
-                    return -1;
-                }
-
-                return xIndex.CompareTo(yIndex);
-            }
+            _selectable.OnSelected(item);
         }
     }
 }

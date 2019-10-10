@@ -19,7 +19,7 @@ type ChangeLayout =
 
 type Layout =
     abstract member Description: string
-    abstract member DoLayout : Stack<User32.HWND> * Rectangle -> (User32.HWND * Rectangle) list
+    abstract member DoLayout : Stack<'a> * Rectangle -> ('a * Rectangle) list
     abstract member HandleMessage : LayoutMessage -> Layout option
 
 module Layout =
@@ -52,7 +52,7 @@ type Full() =
     interface Layout with
         member this.Description = "Full"
 
-        member this.DoLayout(stack: Stack<User32.HWND>, area: Rectangle) = [(stack.focus, area)]
+        member this.DoLayout(stack: Stack<'a>, area: Rectangle) = [(stack.focus, area)]
 
         member this.HandleMessage(_) = None
 
@@ -82,7 +82,7 @@ type Tall(fraction) =
     interface Layout with
         member this.Description = "Tall"
 
-        member this.DoLayout(stack: Stack<User32.HWND>, area: Rectangle) =
+        member this.DoLayout(stack: Stack<'a>, area: Rectangle) =
             let windows = stack.ToList()
             let rectangles = tile fraction area (List.length windows)
             List.zip windows rectangles
@@ -114,7 +114,7 @@ type TwoPane(split) =
     interface Layout with
         member this.Description = "TwoColumn"
 
-        member this.DoLayout(stack: Stack<User32.HWND>, area: Rectangle) =
+        member this.DoLayout(stack: Stack<'a>, area: Rectangle) =
             let (left, right) = splitHorizontallyBy split area
             match List.rev stack.up with
             | main :: _ -> [(main, left); (stack.focus, right)]
@@ -178,9 +178,9 @@ type Choose internal (selected: LeftOrRight, left: Layout, right: Layout) =
         Array.fold (fun acc layout -> Choose(Left, acc, layout)) (Choose(Left, first, second)) others
 
     interface Layout with
-        member this.Description = left.Description + " | " + right.Description
+        member this.Description with get () = layout().Description
 
-        member this.DoLayout(stack: Stack<User32.HWND>, area: Rectangle) =
+        member this.DoLayout(stack: Stack<'a>, area: Rectangle) =
             layout().DoLayout(stack, area)
 
         member this.HandleMessage(msg) =

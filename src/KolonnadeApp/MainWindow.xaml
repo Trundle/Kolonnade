@@ -4,134 +4,101 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:KolonnadeApp"
+        xmlns:kolonnade="clr-namespace:Kolonnade;assembly=Kolonnade"
         mc:Ignorable="d"
-        DataContext="{Binding RelativeSource={RelativeSource Self}}"
         Closing="MainWindow_OnClosing"
         Deactivated="MainWindow_OnDeactivated"
-        KeyDown="MainWindow_OnKeyDown"
-        KeyUp="MainWindow_OnKeyUp"
         WindowStartupLocation="CenterScreen"
-        Style="{StaticResource BasicStyleForAllComponents}"
         Title="MainWindow" Height="450" Width="800"
         Background="Transparent"
         WindowStyle="None"
         AllowsTransparency="True">
     <Window.Resources>
-        <SolidColorBrush x:Key="BackgroundHighlight" Color="#1f1f1f" />
+        <!-- The template for a window selection entry -->
+        <DataTemplate x:Key="WindowListItem">
+            <DockPanel LastChildFill="True">
+                <!-- The desktop number -->
+                <TextBox DockPanel.Dock="Right"
+                         Margin="12, 0, 0, 0"
+                         Text="{Binding Path=Window.Desktop.N, Mode=OneWay}"
+                         BorderBrush="Transparent" Background="DarkGray"
+                         FontWeight="Bold" FontSize="18"
+                         Padding="12" />
+                <!-- Remaining right side: All other information -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition />
+                        <RowDefinition />
+                    </Grid.RowDefinitions>
+                    <!-- At top, small, first two columns: shortcut and process -->
+                    <TextBlock Grid.Row="0" Grid.Column="0"
+                               FontSize="12" FontWeight="Bold"
+                               Text="{Binding Path=ShortCut, Mode=OneWay}" />
+                    <local:HighlightedText Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2"
+                                           Text="{Binding Path=Window.Process, Mode=OneWay}"
+                                           Highlight="{Binding ElementName=SearchInput, Path=Text}"
+                                           TextAlignment="Right"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="#cecece" />
+                    <!-- Second row: the icon and title -->
+                    <!-- The window icon -->
+                    <Image Grid.Row="1" Grid.Column="0"
+                           VerticalAlignment="Center"
+                           Width="32" Height="32"
+                           Source="{Binding Path=Window.Icon, Mode=OneWay}" />
+                    <local:HighlightedText Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                                           Margin="12, 0, 0, 0"
+                                           HorizontalAlignment="Left"
+                                           VerticalAlignment="Center"
+                                           Text="{Binding Path=Window.Title}"
+                                           FontSize="14"
+                                           Highlight="{Binding ElementName=SearchInput, Path=Text}"
+                                           TextTrimming="CharacterEllipsis" />
+                </Grid>
+            </DockPanel>
+        </DataTemplate>
+
+        <!-- The template for a layout selection entry -->
+        <DataTemplate x:Key="LayoutListItem">
+            <StackPanel Orientation="Horizontal">
+                <Canvas Width="32" Height="32">
+                    <!-- Main window area -->
+                    <Rectangle Canvas.Top="{Binding Path=MainWindow.Top}" 
+                               Canvas.Left="{Binding Path=MainWindow.Left}"
+                               Width="{Binding Path=MainWindow.Width}"
+                               Height="{Binding Path=MainWindow.Height}"
+                               Fill="#cecece" />
+                    <!-- Second window area -->
+                    <Rectangle Canvas.Top="{Binding Path=SecondWindow.Top}" 
+                               Canvas.Left="{Binding Path=SecondWindow.Left}"
+                               Width="{Binding Path=SecondWindow.Width}"
+                               Height="{Binding Path=SecondWindow.Height}"
+                               Fill="#909090" />
+                    <!-- Third window area -->
+                    <Rectangle Canvas.Top="{Binding Path=ThirdWindow.Top}" 
+                               Canvas.Left="{Binding Path=ThirdWindow.Left}"
+                               Width="{Binding Path=ThirdWindow.Width}"
+                               Height="{Binding Path=ThirdWindow.Height}"
+                               Fill="#3d3d3d" />
+                </Canvas>
+                <local:HighlightedText Text="{Binding Path=Layout.(kolonnade:Layout.Description)}"
+                                       Margin="12, 0, 0, 0"
+                                       FontSize="18"
+                                       VerticalAlignment="Center" 
+                                       Highlight="{Binding ElementName=SearchInput, Path=Text}" />
+            </StackPanel>
+        </DataTemplate>
     </Window.Resources>
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-        <Grid.Background>
-            <SolidColorBrush Opacity="0.8" Color="#2d2d2d" />
-        </Grid.Background>
-        <TextBox x:Name="SearchInput"
-                 VerticalAlignment="Top"
-                 Background="{StaticResource BackgroundHighlight}" BorderBrush="Transparent" Foreground="Azure"
-                 FontSize="48"
-                 TextChanged="SearchInput_OnTextChanged">
-            <TextBox.Style>
-                <Style TargetType="{x:Type TextBox}">
-                    <Setter Property="Template">
-                        <Setter.Value>
-                            <ControlTemplate TargetType="{x:Type TextBox}">
-                                <Border x:Name="border" BorderBrush="{TemplateBinding BorderBrush}"
-                                        BorderThickness="{TemplateBinding BorderThickness}"
-                                        Background="{TemplateBinding Background}" SnapsToDevicePixels="True">
-                                    <ScrollViewer x:Name="PART_ContentHost" Focusable="false"
-                                                  HorizontalScrollBarVisibility="Hidden"
-                                                  VerticalScrollBarVisibility="Hidden" />
-                                </Border>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsFocused" Value="true">
-                                        <Setter Property="BorderBrush" TargetName="border" Value="Transparent" />
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </Setter.Value>
-                    </Setter>
-                </Style>
-            </TextBox.Style>
-        </TextBox>
-        <ListBox Grid.Row="1"
-                 ItemsSource="{Binding Path=Selectables}"
-                 x:Name="SelectBox"
-                 Foreground="Azure" Background="Transparent" BorderBrush="Transparent"
-                 ScrollViewer.VerticalScrollBarVisibility="Hidden"
-                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-            <ListBox.ItemContainerStyle>
-                <Style TargetType="{x:Type ListBoxItem}">
-                    <Setter Property="Template">
-                        <Setter.Value>
-                            <ControlTemplate TargetType="{x:Type ListBoxItem}">
-                                <Grid x:Name="Content" HorizontalAlignment="Stretch">
-                                    <Border Padding="12">
-                                        <ContentPresenter x:Name="ContentPresenter" />
-                                    </Border>
-                                </Grid>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsSelected" Value="true">
-                                        <Setter TargetName="Content"
-                                                Property="Background"
-                                                Value="{StaticResource BackgroundHighlight}" />
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </Setter.Value>
-                    </Setter>
-                </Style>
-            </ListBox.ItemContainerStyle>
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <DockPanel LastChildFill="True">
-                        <!-- The desktop number -->
-                        <TextBox DockPanel.Dock="Right"
-                                 Margin="12, 0, 0, 0"
-                                 Text="{Binding Path=Window.Desktop.N, Mode=OneWay}"
-                                 BorderBrush="Transparent" Background="DarkGray"
-                                 FontWeight="Bold" FontSize="18"
-                                 Padding="12" />
-                        <!-- Remaining right side: All other information -->
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition />
-                                <RowDefinition />
-                            </Grid.RowDefinitions>
-                            <!-- At top, small, first two columns: shortcut and process -->
-                            <TextBlock Grid.Row="0" Grid.Column="0"
-                                       FontSize="12" FontWeight="Bold"
-                                       Text="{Binding Path=ShortCut, Mode=OneWay}" />
-                            <local:HighlightedText Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2"
-                                                   Text="{Binding Path=Window.Process, Mode=OneWay}"
-                                                   Highlight="{Binding ElementName=SearchInput, Path=Text}"
-                                                   TextAlignment="Right"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   Foreground="#cecece" />
-                            <!-- Second row: the icon and title -->
-                            <!-- The window icon -->
-                            <Image Grid.Row="1" Grid.Column="0"
-                                   VerticalAlignment="Center"
-                                   Width="32" Height="32"
-                                   Source="{Binding Path=Window.Icon, Mode=OneWay}" />
-                            <local:HighlightedText Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
-                                                   Margin="12, 0, 0, 0"
-                                                   HorizontalAlignment="Left"
-                                                   VerticalAlignment="Center"
-                                                   Text="{Binding Path=Window.Title}"
-                                                   FontSize="14"
-                                                   Highlight="{Binding ElementName=SearchInput, Path=Text}"
-                                                   TextTrimming="CharacterEllipsis" />
-                        </Grid>
-                    </DockPanel>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
-    </Grid>
+    <local:SearchableSelectList
+        x:Name="SelectList"
+        Cancelled="ResetAndHide"
+        Selected="SelectList_OnSelected"
+        UpdateSelectables="UpdateViewList"
+        ItemTemplate="{StaticResource WindowListItem}"
+        />
 </Window>

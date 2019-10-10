@@ -223,6 +223,11 @@ type StackSet<'W, 'L when 'W: equality> =
         List.tryFind (fun d -> d.workspace.tag = tag) (this.Displays())
         |> Option.isSome
 
+    /// Updates the layout on the current workspace.
+    member this.WithCurrentLayout(newLayout) =
+        let newWorkspace = { this.current.workspace with layout = newLayout }
+        { this with current = { this.current with workspace = newWorkspace } }
+
 module internal StackSet =
     /// Constructs a new StackSet from Window's current state
     let fromDesktops<'W, 'L when 'W: equality> (desktopManager: VirtualDesktop.Manager,

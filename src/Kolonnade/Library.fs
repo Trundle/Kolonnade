@@ -304,9 +304,19 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
 
     member this.PostMessage(msg) =
         stackSet.current.workspace.layout.HandleMessage(msg) |> Option.iter (fun newLayout ->
-            let newWorkspace = { stackSet.current.workspace with layout = newLayout }
-            stackSet <- { stackSet with current = { stackSet.current with workspace = newWorkspace } }
+            stackSet <- stackSet.WithCurrentLayout(newLayout)
             refresh())
+
+    /// XXX Assumes that the layout is a Choose
+    member this.EnumerateLayouts() =
+        let result = System.Collections.Generic.List<Layout>()
+        let rec addNext = function
+            | Some (layout: Layout) ->
+                result.Add(layout)
+                addNext(layout.HandleMessage(NextLayoutNoWrap))
+            | None -> ()
+        addNext(stackSet.current.workspace.layout.HandleMessage(FirstLayout))
+        result
 
     member internal this.HandleEvent(event: WorldEvent) =
         match event with
