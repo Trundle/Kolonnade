@@ -115,17 +115,16 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             | _ -> desktopManager.GetDesktops().[stackSet.current.workspace.tag - 1]
         // For each display, layout the currently visible workspace
         for display in stackSet.Displays() do
-            display.workspace.stack
-            |> Option.iter (fun stack ->
-                // XXX how to handle here that the display area can't be determined?
-                let displayArea = DisplayUtils.rectangleFromMonitorHandle display.monitor
+            match (display.workspace.stack, DisplayUtils.rectangleFromMonitorHandle display.monitor) with
+            | (Some stack, Some displayArea) ->
                 let mutable notSeen = Set(stack.ToList())
-                for (w, area) in display.workspace.layout.DoLayout(stack, displayArea.Value) do
+                for (w, area) in display.workspace.layout.DoLayout(stack, displayArea) do
                     moveToDesktopIfRequired targetDesktop w
                     setWindowPosIfRequired w area
                     notSeen <- notSeen.Remove(w)
                 for w in notSeen do
-                    moveToBackground w)
+                    moveToBackground w
+            | _ -> ()
         // Activate focused window or switch to desktop if stack is empty
         match stackSet.Peek() with
         | Some hWnd -> User32.SetForegroundWindow(hWnd) |> ignore
