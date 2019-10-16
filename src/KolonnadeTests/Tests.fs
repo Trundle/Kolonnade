@@ -1,4 +1,6 @@
-﻿open Expecto
+﻿open System.Drawing
+
+open Expecto
 open Kolonnade
 
 let properties =
@@ -33,6 +35,33 @@ let properties =
                 result = stack
     ]
 
+let rotatedLayout = testList "rotated layout" [
+    test "Description property returns description" {
+        let layout = Rotated(Tall(0.7)) :> Layout
+        Expect.equal layout.Description "Rotated(Tall)" "Description = Rotated(…)"
+    }
+
+    test "rotates layout" {
+        let layout = Rotated(TwoPane(0.5)) :> Layout
+        let stack: Stack<int> = { focus = 1; up = []; down = [2; 3] }
+        let arrangement = layout.DoLayout(stack, Rectangle(0, 0, 200, 100))
+        let expected = [(1, Rectangle(0, 0, 200, 50)); (2, Rectangle(0, 50, 200, 50))]
+        Expect.equal arrangement expected "rotated window arrangement"
+    }
+
+    test "rotates layout with one window" {
+        let layout = Rotated(TwoPane(0.5)) :> Layout
+        let stack: Stack<int> = { focus = 1; up = []; down = [] }
+        let arrangement = layout.DoLayout(stack, Rectangle(0, 0, 200, 100))
+        let expected = [(1, Rectangle(0, 0, 200, 100))]
+        Expect.equal arrangement expected "rotated window arrangement"
+    }
+]
+
+let tests = testList "all tests" [
+    properties; rotatedLayout
+]
+
 [<EntryPoint>]
 let main _ =
-    Tests.runTests defaultConfig properties
+    Tests.runTests defaultConfig tests

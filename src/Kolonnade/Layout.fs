@@ -188,3 +188,16 @@ type Choose internal (selected: LeftOrRight, left: Layout, right: Layout) =
             | :? ChangeLayout as changeLayout -> handleChangeLayout changeLayout
             | :? ChangeLayoutWrap as changeLayoutWrap -> handleChangeLayoutWrap changeLayoutWrap
             | _ -> handleMessage msg
+
+
+/// Rotates another layout by 90 degrees.
+type Rotated(layout: Layout) =
+    let rotate (area: Rectangle) = Rectangle(area.Y, area.X, area.Height, area.Width)
+
+    interface Layout with
+        member this.Description with get() = sprintf "Rotated(%s)" layout.Description
+
+        member this.DoLayout(stack: Stack<'a>, area: Rectangle) =
+            List.map (fun (w, a) -> (w, rotate a)) (layout.DoLayout(stack, rotate area))
+
+        member this.HandleMessage(_) = None

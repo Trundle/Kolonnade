@@ -44,7 +44,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
     let processNameCache = LRUCache<User32.HWND, string option>(512)
     let window_icon_cache = LRUCache<User32.HWND, 'I option>(512)
     let mutable stackSet =
-        let layout = Choose.between(Full(), TwoPane(0.5), Tall(0.7))
+        let layout = Choose.between(Full(), TwoPane(0.5), Tall(0.7), Rotated(TwoPane(0.5)), Rotated(Tall(0.7)))
         StackSet.fromDesktops<User32.HWND, Layout> (desktopManager, List.ofSeq (DisplayUtils.getDisplays()), layout)
     let mutable moving: (User32.HWND * User32.RECT) option = None
     let movingHwnd() = Option.map (fun (hWnd, _) -> hWnd) moving
