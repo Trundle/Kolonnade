@@ -15,6 +15,7 @@
     <Compile Include="Layout.fs" />
     <Compile Include="WinUtils.fs" />
     <Compile Include="DisplayUtils.fs" />
+    <Compile Include="ActivityTracker.fs" />
     <Compile Include="Library.fs" />
   </ItemGroup>
 

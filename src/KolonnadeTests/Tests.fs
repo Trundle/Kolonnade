@@ -2,6 +2,7 @@
 
 open Expecto
 open Kolonnade
+open KolonnadeTests
 
 let properties =
     testList "Stack properties" [
@@ -59,7 +60,7 @@ let rotatedLayout = testList "rotated layout" [
 ]
 
 let tests = testList "all tests" [
-    properties; rotatedLayout
+    properties; rotatedLayout; ActivityTrackerTests.tests;
 ]
 
 [<EntryPoint>]

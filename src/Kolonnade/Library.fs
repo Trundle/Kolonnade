@@ -43,6 +43,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
                                                iconLoader: User32.HWND -> 'I) =
     let processNameCache = LRUCache<User32.HWND, string option>(512)
     let window_icon_cache = LRUCache<User32.HWND, 'I option>(512)
+    let windowActivityTracker = ActivityTracker<User32.HWND>((3, TimeSpan.FromSeconds(1.0)), fun () -> DateTime.Now)
     let mutable stackSet =
         let layout = Choose.between(Full(), TwoPane(0.5), Tall(0.7), Rotated(TwoPane(0.5)), Rotated(Tall(0.7)))
         StackSet.fromDesktops<User32.HWND, Layout> (desktopManager, List.ofSeq (DisplayUtils.getDisplays()), layout)
@@ -334,7 +335,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             if onCurrentDesktop hWnd then
                 if User32.IsIconic(hWnd) then
                     User32.ShowWindow(hWnd, User32.SW_RESTORE) |> ignore
-                else
+                else if windowActivityTracker.Track(hWnd) = Boring then
                     refresh()
         // XXX desktop change
         | WindowFocused hWnd -> stackSet <- stackSet.Focus(hWnd)

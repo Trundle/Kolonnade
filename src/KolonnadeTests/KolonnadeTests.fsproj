@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="ActivityTrackerTests.fs" />
     <Compile Include="Tests.fs" />
   </ItemGroup>
 
