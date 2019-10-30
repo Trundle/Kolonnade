@@ -59,6 +59,10 @@ type Full() =
 
 // The Tall layout: actual tiling 🥳
 type Tall(fraction) =
+    do
+        if fraction < 0.001 || fraction > 1.0 then
+            raise (System.ArgumentException(sprintf "fraction must be between 0.001 and 1, got %f" fraction))
+
     let delta = 0.05
 
     let handleWindowSizeChange stack hWnd (oldRect : Rectangle) (newRect : Rectangle) =
@@ -78,6 +82,8 @@ type Tall(fraction) =
         let (mainPane, otherPane) = splitHorizontallyBy mainPaneFraction area
         if numberOfWindows <= 1 then splitVertically numberOfWindows area
         else mainPane :: splitVertically (numberOfWindows - 1) otherPane
+
+    override this.ToString() = sprintf "Tall(%f)" fraction
 
     interface Layout with
         member this.Description = "Tall"

@@ -36,6 +36,42 @@ let properties =
                 result = stack
     ]
 
+module Generators =
+    let genFull = Full() :> Layout |> FsCheck.Gen.constant
+
+    let genTall = FsCheck.Gen.map
+                      (fun f -> Tall(abs (float f / 1e6)) :> Layout)
+                      (FsCheck.Gen.choose(1_000, 1_000_000))
+
+    let genTwoPane = FsCheck.Gen.map
+                         (fun f -> TwoPane(abs (float f / 1e6)) :> Layout)
+                         (FsCheck.Gen.choose(1_000, 1_000_000))
+
+    let genRotated = FsCheck.Gen.map
+                         (fun l -> Rotated(l) :> Layout)
+                         (FsCheck.Gen.oneof [genTall; genTwoPane])
+
+    type RectangleGen =
+        static member Rectangle(): FsCheck.Arbitrary<Rectangle> =
+            let intGen = FsCheck.Arb.generate<int>
+            FsCheck.Gen.map4 (fun x y w h -> Rectangle(x, y, w, h)) intGen intGen intGen intGen
+            |> FsCheck.Gen.filter (fun r -> r.Width > 10 && r.Height > 10)
+            |> FsCheck.Arb.fromGen
+
+    type LayoutGen =
+        static member Layout(): FsCheck.Arbitrary<Layout> =
+            FsCheck.Gen.oneof [genFull; genTall; genTwoPane; genRotated]
+            |> FsCheck.Arb.fromGen
+
+    let config = { FsCheckConfig.defaultConfig with arbitrary = [typeof<LayoutGen>; typeof<RectangleGen>] }
+
+let allLayouts = testList "properties for all layouts" [
+    testPropertyWithConfig Generators.config "window area fits display area" <|
+        fun (layout: Layout, stack: Stack<int>, rectangle: Rectangle) ->
+            let arrangement = layout.DoLayout(stack, rectangle)
+            List.forall (fun (_, x: Rectangle) -> rectangle.Contains(x)) arrangement
+]
+
 let rotatedLayout = testList "rotated layout" [
     test "Description property returns description" {
         let layout = Rotated(Tall(0.7)) :> Layout
@@ -60,7 +96,7 @@ let rotatedLayout = testList "rotated layout" [
 ]
 
 let tests = testList "all tests" [
-    properties; rotatedLayout; ActivityTrackerTests.tests;
+    properties; allLayouts; rotatedLayout; ActivityTrackerTests.tests;
 ]
 
 [<EntryPoint>]
