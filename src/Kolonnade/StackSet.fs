@@ -57,8 +57,7 @@ type Stack<'A> when 'A : equality =
 type Workspace<'W, 'L> when 'W : equality =
     { tag: int // Note: starts at 1
       stack: Stack<'W> option
-      layout: 'L
-      desktop: VirtualDesktop.Desktop }
+      layout: 'L }
 
 /// A visible workspace
 type Display<'W, 'L> when 'W : equality =
@@ -237,7 +236,7 @@ module internal StackSet =
         desktopManager.GetDesktops().[0].SwitchTo()
 
         let workspaces = seq (desktopManager.GetDesktops())
-                         |> Seq.mapi (fun i d -> { tag = i + 1; stack = None; desktop = d; layout = defaultLayout })
+                         |> Seq.mapi (fun i _ -> { tag = i + 1; stack = None; layout = defaultLayout })
                          |> Seq.toList
         let (seen, unseen) = List.splitAt (List.length displayRects) workspaces
         let displays = List.mapi (fun i ((handle, _), workspace) ->

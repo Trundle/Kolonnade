@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <Compile Include="ActivityTrackerTests.fs" />
+    <Compile Include="OperationsTests.fs" />
     <Compile Include="Tests.fs" />
   </ItemGroup>
 

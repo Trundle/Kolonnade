@@ -137,6 +137,10 @@ namespace KolonnadeApp
                 case 'c':
                     LockWorkStation();
                     break;
+                // Swap workspaces of first two displays
+                case 's':
+                    _windowManager.ModifyStackSet(Operations.swapDisplays);
+                    break;
             }
         }
 

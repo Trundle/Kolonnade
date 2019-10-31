@@ -12,6 +12,7 @@
     <Compile Include="Native.fs" />
     <Compile Include="VirtualDesktop.fs" />
     <Compile Include="StackSet.fs" />
+    <Compile Include="Operations.fs" />
     <Compile Include="Layout.fs" />
     <Compile Include="WinUtils.fs" />
     <Compile Include="DisplayUtils.fs" />

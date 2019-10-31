@@ -96,7 +96,11 @@ let rotatedLayout = testList "rotated layout" [
 ]
 
 let tests = testList "all tests" [
-    properties; allLayouts; rotatedLayout; ActivityTrackerTests.tests;
+    properties;
+    allLayouts;
+    rotatedLayout;
+    ActivityTrackerTests.tests;
+    OperationsTests.tests;
 ]
 
 [<EntryPoint>]
