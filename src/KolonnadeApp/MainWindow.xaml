@@ -20,7 +20,7 @@
                 <!-- The desktop number -->
                 <TextBox DockPanel.Dock="Right"
                          Margin="12, 0, 0, 0"
-                         Text="{Binding Path=Window.Desktop.N, Mode=OneWay}"
+                         Text="{Binding Path=Window.Desktop, Mode=OneWay}"
                          BorderBrush="Transparent" Background="DarkGray"
                          FontWeight="Bold" FontSize="18"
                          Padding="12" />

@@ -11,19 +11,17 @@ type Id = private Id of IntPtr
 
 // Used for information purposes (i.e. quick window jump), but not for internal bookkeeping
 type Window<'I when 'I: null> internal (process_name: string option,
-                                        desktop: VirtualDesktop.Desktop,
+                                        desktop: int,
                                         hWnd: User32.HWND,
                                         title: String,
-                                        icon: 'I option) =
+                                        icon: 'I option,
+                                        focus: User32.HWND -> unit) =
    member this.Desktop = desktop
    member this.Process = Option.toObj process_name
    member this.Title = title
    member this.Icon = Option.toObj icon
    member this.Id = Id hWnd
-   member this.ToForeground() =
-       // XXX maximize if minimized?
-       User32.SetForegroundWindow(hWnd)
-       |> ignore
+   member this.ToForeground() = focus(hWnd)
 
 type internal WorldEvent =
     | DesktopChanged
@@ -43,6 +41,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
                                                iconLoader: User32.HWND -> 'I) =
     let processNameCache = LRUCache<User32.HWND, string option>(512)
     let window_icon_cache = LRUCache<User32.HWND, 'I option>(512)
+    let windowTitleCache = LRUCache<User32.HWND, string>(512)
     let windowActivityTracker = ActivityTracker<User32.HWND>((3, TimeSpan.FromSeconds(1.0)), fun () -> DateTime.Now)
     let mutable stackSet =
         let layout = Choose.between(Full(), TwoPane(0.5), Tall(0.7), Rotated(TwoPane(0.5)), Rotated(Tall(0.7)))
@@ -136,6 +135,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
 
     let manage hWnd =
         stackSet <- stackSet.InsertUp(hWnd)
+        WinUtils.windowTitle hWnd |> Option.iter (fun title -> windowTitleCache.Add(hWnd, title))
         refresh()
 
     let desktopForTag tag =
@@ -148,6 +148,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             match desktopManager.GetDesktop(hWnd) with
             | Some desktop ->
                 stackSet <- stackSet.View(desktop.N).InsertUp(hWnd)
+                WinUtils.windowTitle hWnd |> Option.iter (fun title -> windowTitleCache.Add(hWnd, title))
             | None -> ()
         stackSet <- stackSet.View(1)
         refresh()
@@ -235,17 +236,24 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
     static member EmptyRect = Rectangle(0, 0, 0, 0)
 
     member this.GetWindows() =
-        WinUtils.windows User32.IsWindowVisible
-        |> seq<User32.HWND>
-        |> Seq.map (fun hWnd -> (desktopManager.GetDesktop(hWnd), hWnd, WinUtils.windowTitle hWnd))
+        let focus hWnd = this.ModifyStackSet(fun s -> s.Focus(hWnd))
+        stackSet.Workspaces()
+        |> List.map
+               (fun w ->
+                        let entry hWnd = (cleanUpProcessName (determineProcess hWnd),
+                                          w.tag,
+                                          hWnd,
+                                          windowTitleCache.Get(hWnd),
+                                          getIcon hWnd)
+                        match w.stack with
+                        | Some stack -> List.map entry (stack.ToList())
+                        | None -> [])
+        |> List.fold (@) []
         |> Seq.collect (function
-            | (None, _, _) -> Seq.empty
-            | (_, _, None) -> Seq.empty
-            | (Some(desktop), hWnd, Some(title)) ->
-                let process_name = determineProcess (hWnd)
-                let icon = getIcon hWnd
-                Seq.singleton (Window(cleanUpProcessName process_name, desktop, hWnd, title, icon))
-            )
+            | (_, _, _, None, _) -> Seq.empty
+            | (processName, tag, hWnd, Some title, icon) ->
+                Window(processName, tag, hWnd, title, icon, focus)
+                |> Seq.singleton)
 
     member this.SwitchToWorkspace(i) =
         moveWindowsBackToBelongingDesktop i
@@ -328,6 +336,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
         | DisplaysChanged -> handleDisplayChange()
         | WindowCreated hWnd when interesting hWnd -> manage hWnd
         | WindowDestroyed hWnd ->
+            windowTitleCache.Remove(hWnd)
             let workspace = stackSet.FindWorkspace(hWnd)
             stackSet <- stackSet.Delete(hWnd)
             Option.iter (fun ws -> if stackSet.IsOnSomeDisplay(ws.tag) then refresh()) workspace
@@ -357,4 +366,6 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
                 stackSet <- stackSet.ShiftWin(d.N, hWnd)
                 refresh()
             | _ -> ()
+        | TitleChanged hWnd ->
+            WinUtils.windowTitle hWnd |> Option.iter (fun title -> windowTitleCache.Add(hWnd, title))
         | _ -> ()

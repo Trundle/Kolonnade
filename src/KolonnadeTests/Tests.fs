@@ -101,6 +101,7 @@ let tests = testList "all tests" [
     rotatedLayout;
     ActivityTrackerTests.tests;
     OperationsTests.tests;
+    LRUCacheTests.tests;
 ]
 
 [<EntryPoint>]

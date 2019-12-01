@@ -4,6 +4,9 @@ open System.Collections.Generic
 
 // A simple LRU cache. Makes no use of FP at all. Not thread-safe!
 type LRUCache<'K, 'V> when 'K : comparison internal (maxSize) =
+    do
+        if maxSize <= 0 then raise (System.ArgumentException("zero or negative-sized cache"))
+
     let lastUsed = LinkedList<'K * 'V>()
     let mutable elements = Map.empty<'K, LinkedListNode<'K * 'V>>
 
@@ -30,3 +33,10 @@ type LRUCache<'K, 'V> when 'K : comparison internal (maxSize) =
             lastUsed.AddFirst(element)
             Some(snd element.Value)
         | None -> None
+
+    member this.Remove(key) =
+        match elements.TryFind(key) with
+        | Some element ->
+            lastUsed.Remove(element)
+            elements <- elements.Remove(key)
+        | None -> ()
