@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Data;
@@ -170,7 +171,22 @@ namespace KolonnadeApp
                 case ' ':
                     OnLayoutJumperHotKey();
                     break;
+                // Start terminal
+                case '\r':
+                    StartTerminal();
+                    break;
             }
+        }
+
+        private void StartTerminal()
+        {
+            using var terminal = new Process {
+                StartInfo = {
+                    UseShellExecute = false,
+                    FileName = Properties.Resources.TerminalApp,
+                    Arguments = Properties.Resources.TerminalArgs,
+                }};
+            terminal.Start();
         }
 
         private void OnWindowJumperHotKey()
@@ -179,14 +195,12 @@ namespace KolonnadeApp
             SelectList.ItemTemplate = Resources["WindowListItem"] as DataTemplate;
             CommonJumperHotKey();
         }
-
         private void OnLayoutJumperHotKey()
         {
             _selectable = _layoutSelectable;
             SelectList.ItemTemplate = Resources["LayoutListItem"] as DataTemplate;
             CommonJumperHotKey();
         }
-
         private void CommonJumperHotKey()
         {
             var monitorRect = _windowManager.GetActiveMonitor();
