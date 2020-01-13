@@ -292,24 +292,6 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
             stackSet <- stackSet.View(ws.tag)
             refresh())
 
-    /// Activate Kolonnade by injecting a hotkey keypress.
-    /// Windows grants apps that received a hotkey message certain rights, such as setting the
-    /// foreground window, which is something Kolonnade needs. Hence instead of doing actions
-    /// right away, hotkey keypresses are injected, Windows then sends an activation message
-    /// to Kolonnade and Kolonnade has the rights to shuffle windows around.
-    member this.ActivateViaHotkey() =
-        let key vk flags : User32.INPUT =
-            let ki : User32.KEYBDINPUT =
-                { wVk = int16 vk; wScan = int16 vk; dwFlags = flags; time = 0; dwExtraInfo = 0n }
-            { ``type`` = User32.InputType.Keyboard; ki = ki; padding = 0; padding2 = 0 }
-        let keyDown vk = key vk (enum<User32.KeyEventFlags>(0))
-        let keyUp vk = key vk User32.KeyEventFlags.KeyUp
-        let input = [|
-            keyDown User32.VirtualKey.F13;
-            keyUp User32.VirtualKey.F13;
-        |]
-        User32.SendInput(uint32 input.Length, input, Marshal.SizeOf<User32.INPUT>()) |> ignore
-
     member this.PostMessage(msg) =
         stackSet.current.workspace.layout.HandleMessage(msg) |> Option.iter (fun newLayout ->
             stackSet <- stackSet.WithCurrentLayout(newLayout)

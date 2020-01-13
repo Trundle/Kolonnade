@@ -49,43 +49,6 @@ module internal User32 =
         val rcWork: RECT
         val dwFlags: int
 
-    [<FlagsAttribute>]
-    type KeyEventFlags =
-        | ExtendedKey = 1
-        | KeyUp = 2
-
-    [<Struct; StructLayout(LayoutKind.Sequential)>]
-    type KEYBDINPUT =
-        { wVk: int16
-          wScan: int16
-          dwFlags: KeyEventFlags
-          time: int
-          dwExtraInfo: nativeint }
-
-    type InputType =
-        | Mouse = 0
-        | Keyboard = 1
-        | Hardware = 2
-
-    [<Struct; StructLayout(LayoutKind.Sequential)>]
-    type INPUT =
-        { ``type``: InputType
-          ki: KEYBDINPUT
-          padding: int
-          padding2: int }
-
-    type VirtualKey =
-        | Shift = 0x10
-        | Space = 0x20
-        | LWin = 0x5b
-        | F7 = 0x76
-        | F13 = 0x7c
-        | LShift = 0xa0
-        | LControl = 0xa2
-
-    [<DllImport("user32.dll", SetLastError = true)>]
-    extern int SendInput(uint32 cInputs, [<MarshalAs(UnmanagedType.LPArray); In>] INPUT[] lpInputs, int cbSize)
-
     [<DllImport("user32.dll", SetLastError = true)>]
     extern bool GetKeyboardState( [<Out>] byte[] lpKeyState)
 

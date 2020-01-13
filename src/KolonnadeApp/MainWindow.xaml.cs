@@ -41,7 +41,6 @@ namespace KolonnadeApp
         {
             var interopHelper = new WindowInteropHelper(this);
             var hWnd = interopHelper.EnsureHandle();
-            // N.B. You also need to change WindowManager.ActivateViaHotkey() if you change the key here
             if (!RegisterHotKey(hWnd, 1, KeyModifiers.NoRepeat, VkF13) ||
                 !RegisterHotKey(hWnd, 2, KeyModifiers.Shift | KeyModifiers.NoRepeat, VkF13))
             {
@@ -74,7 +73,6 @@ namespace KolonnadeApp
             else if (msg == _hotkeyMessage)
             {
                 _hotkeyQueue.Enqueue(((char) wparam.ToInt32(), (KeyModifiers) lparam.ToInt32()));
-                _windowManager.ActivateViaHotkey();
             }
 
             return IntPtr.Zero;
