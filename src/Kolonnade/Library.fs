@@ -49,6 +49,11 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
     let mutable moving: (User32.HWND * User32.RECT) option = None
     let movingHwnd() = Option.map (fun (hWnd, _) -> hWnd) moving
 
+    let isElevatedWindow hWnd =
+        match WinUtils.windowProcess hWnd with
+        | Some (_, WinUtils.Elevated) -> true
+        | _ -> false
+
     /// Returns whether the given hWnd should be handled by Kolonnade.
     let interesting hWnd =
         let style: User32.WindowStyle = enum (int (User32.GetWindowLongPtr(hWnd, User32.GWL_STYLE).ToInt64()))
@@ -58,6 +63,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
         && not (style.HasFlag(User32.WindowStyle.Child))
         && not (exStyle.HasFlag(User32.ExtendedWindowStyle.ToolWindow))
         && User32.IsWindowVisible(hWnd)
+        && not (isElevatedWindow hWnd)
 
     let setWindowPosIfRequired hWnd (area: Rectangle) =
         let actualRect = WinUtils.windowFrameRect hWnd
@@ -157,7 +163,7 @@ type WindowManager<'I when 'I: null> internal (desktopManager: VirtualDesktop.Ma
         match processNameCache.Get(hWnd) with
         | Some(value) -> value
         | None ->
-            let name = WinUtils.windowProcess hWnd
+            let name = WinUtils.windowProcess hWnd |> Option.map fst
             processNameCache.Add(hWnd, name)
             name
 

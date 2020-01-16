@@ -5,6 +5,18 @@ open System.Drawing
 open System.Runtime.InteropServices
 open System.Text
 
+module internal Advapi32 =
+    let TOKEN_QUERY = 0x8u
+
+    type TOKEN_INFORMATION_CLASS =
+        | TokenElevation = 0x14
+
+    [<DllImport("advapi32.dll", SetLastError = true)>]
+    extern bool OpenProcessToken(IntPtr ProcessHandle, UInt32 DesiredAccess, IntPtr& TokenHandle)
+    [<DllImport("advapi32.dll", SetLastError = true)>]
+    extern bool GetTokenInformation(IntPtr Handle, TOKEN_INFORMATION_CLASS TokenInformationClass,
+                                    IntPtr TokenInformation, int TokenInformationLength, int& ReturnLength)
+
 module internal Kernel32 =
     [<DllImport("kernel32.dll", SetLastError = true)>]
     extern bool CloseHandle(IntPtr hObject)

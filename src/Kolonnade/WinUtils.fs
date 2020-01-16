@@ -12,6 +12,27 @@ open System.Text
 #nowarn "9"
 
 module internal WinUtils =
+    type ElevationLevel = Elevated | NotElevated
+
+    let isElevated token =
+        let mutable dwLength = Marshal.SizeOf<int>()
+        let info = Marshal.AllocHGlobal(dwLength)
+        try
+            Advapi32.GetTokenInformation(token, Advapi32.TOKEN_INFORMATION_CLASS.TokenElevation, info, dwLength,
+                                         &dwLength) |> ignore
+            Marshal.ReadInt32(info) <> 0
+        finally Marshal.FreeHGlobal(info)
+
+    let private determineProcessOwner handle =
+        let mutable token = IntPtr.Zero
+        if Advapi32.OpenProcessToken(handle, Advapi32.TOKEN_QUERY, &token) then
+            try
+                if isElevated token then Elevated else NotElevated
+            finally Kernel32.CloseHandle(token) |> ignore
+        else
+            // Wild guess 🤷
+            Elevated
+
     let windowTitle hWnd =
         let stringBuilder = new StringBuilder(2048)
         match User32.GetWindowText(hWnd, stringBuilder, stringBuilder.Capacity) with
@@ -24,7 +45,8 @@ module internal WinUtils =
         match Kernel32.OpenProcess(User32.PROCESS_QUERY_LIMITED_INFORMATION, false, pid) with
         | handle when handle <> IntPtr.Zero ->
             try
-                Some(Psapi.get_process_image_file_name(handle))
+                let processName = Psapi.get_process_image_file_name(handle)
+                Some (processName, determineProcessOwner handle)
             finally
                 Kernel32.CloseHandle(handle) |> ignore
         | _ -> None
