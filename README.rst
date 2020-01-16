@@ -50,6 +50,32 @@ While it's possible to do all of that in .NET and only one process, AutoHotKey
 already exists and does the job.
 
 
+Keybindings
+===========
+
+======================  =================================================
+Binding                 Action
+======================  =================================================
+Win + Shift + Return    Launch terminal
+Win + Space             Rotate through the available layout algorithms
+Win + Shift + Space     Open layout algorithm quick jumper
+Win + j                 Move focus to the next window
+Win + k                 Move focus to the previous window
+Win + m                 Move focus to the main window
+Win + Return            Swap the focused window and the main window
+Win + Shift + j         Swap the focused window with the next window
+Win + Shift + k         Swap the focused window with the previous window
+Win + h                 Shrink the main area
+Win + l                 Expand the main area
+Win + [1 .. 9]          Switch to workspace N
+Win + Shift + [1 .. 9]  Move window to workspace N
+Win + f                 Open window quick jumper
+Win + s                 Swap workspaces on primary and secondary display
+Win + i, Win + w        Focus primary display
+Win + a, Win + e        Focus secondary display
+Win + c                 Lock workstation
+======================  =================================================
+
 Prior Art
 =========
 
